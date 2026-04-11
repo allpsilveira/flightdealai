@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    @apply antialiased;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-navy-950 text-white font-sans;
+    background-image: radial-gradient(ellipse at 20% 50%, rgba(212, 168, 67, 0.03) 0%, transparent 60%),
+                      radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-navy-950;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gold-600;
+  }
+}
+
+/* ── Components ────────────────────────────────────────────────────────────── */
+@layer components {
+  /* Luxury card with frosted glass */
+  .card {
+    @apply bg-surface border border-surface-border rounded-2xl shadow-card;
+    backdrop-filter: blur(12px);
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-gold-500/30 hover:shadow-luxury cursor-pointer;
+  }
+
+  /* Gold accent line */
+  .gold-rule {
+    @apply h-px bg-gradient-to-r from-transparent via-gold-500/50 to-transparent;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-sans font-medium text-sm
+           bg-gold-500 text-navy-950 transition-all duration-200
+           hover:bg-gold-400 hover:shadow-gold active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-sans font-medium text-sm
+           text-white/70 border border-surface-border transition-all duration-200
+           hover:text-white hover:border-gold-500/40 hover:bg-surface-hover active:scale-95;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full bg-surface border border-surface-border rounded-xl px-4 py-3
+           text-sm font-sans text-white placeholder-white/30
+           focus:outline-none focus:border-gold-500/60 focus:ring-1 focus:ring-gold-500/30
+           transition-colors duration-200;
+  }
+
+  /* Score badge variants */
+  .badge-strong-buy {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sans font-semibold
+           bg-emerald-500/20 text-emerald-400 border border-emerald-500/30;
+  }
+  .badge-buy {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sans font-semibold
+           bg-blue-500/20 text-blue-400 border border-blue-500/30;
+  }
+  .badge-watch {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sans font-semibold
+           bg-amber-500/20 text-amber-400 border border-amber-500/30;
+  }
+  .badge-normal {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sans font-semibold
+           bg-white/10 text-white/50 border border-white/10;
+  }
+  .badge-gem {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-sans font-semibold
+           bg-gold-500/20 text-gold-400 border border-gold-500/40 animate-pulse-gold;
+  }
+}

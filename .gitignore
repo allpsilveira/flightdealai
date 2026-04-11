@@ -1,0 +1,41 @@
+# Environment — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Airflow
+airflow/logs/
+airflow/plugins/__pycache__/
+
+# Docker volumes
+pgdata/
+airflow-logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic — keep migrations, ignore cache
+backend/alembic/__pycache__/
+
+# Nginx SSL certs (generated on server)
+nginx/ssl/

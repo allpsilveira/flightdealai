@@ -1,0 +1,23 @@
+[
+  { "card_program": "Chase UR",     "airline_program": "United MileagePlus",    "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Chase UR",     "airline_program": "Air Canada Aeroplan",   "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Chase UR",     "airline_program": "British Airways Avios",  "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Chase UR",     "airline_program": "Singapore KrisFlyer",   "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Chase UR",     "airline_program": "Iberia Plus",           "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Chase UR",     "airline_program": "Virgin Atlantic Flying Club", "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "Avianca LifeMiles",     "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "Azul TudoAzul",         "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "GOL Smiles",            "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "Air Canada Aeroplan",   "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "British Airways Avios",  "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "Singapore KrisFlyer",   "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Amex MR",      "airline_program": "Qatar Privilege Club",  "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Capital One",  "airline_program": "Avianca LifeMiles",     "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Capital One",  "airline_program": "Air Canada Aeroplan",   "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Capital One",  "airline_program": "British Airways Avios",  "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Citi TYP",     "airline_program": "Avianca LifeMiles",     "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Citi TYP",     "airline_program": "Turkish Miles&Smiles",  "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Citi TYP",     "airline_program": "Qatar Privilege Club",  "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Brex",         "airline_program": "Air Canada Aeroplan",   "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 },
+  { "card_program": "Brex",         "airline_program": "Avianca LifeMiles",     "transfer_ratio": 1.0, "transfer_fee_percent": 0.0, "min_transfer_points": 1000 }
+]

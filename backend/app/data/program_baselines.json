@@ -1,0 +1,19 @@
+[
+  { "program_code": "UA",  "program_name": "United MileagePlus",       "baseline_cpp": 1.35 },
+  { "program_code": "AA",  "program_name": "American AAdvantage",      "baseline_cpp": 1.50 },
+  { "program_code": "DL",  "program_name": "Delta SkyMiles",           "baseline_cpp": 1.20 },
+  { "program_code": "AC",  "program_name": "Air Canada Aeroplan",      "baseline_cpp": 1.55 },
+  { "program_code": "AV",  "program_name": "Avianca LifeMiles",        "baseline_cpp": 1.60 },
+  { "program_code": "AZ",  "program_name": "Azul TudoAzul",            "baseline_cpp": 1.40 },
+  { "program_code": "G3",  "program_name": "GOL Smiles",               "baseline_cpp": 1.30 },
+  { "program_code": "LA",  "program_name": "LATAM Pass",               "baseline_cpp": 1.25 },
+  { "program_code": "TK",  "program_name": "Turkish Miles&Smiles",     "baseline_cpp": 2.20 },
+  { "program_code": "QR",  "program_name": "Qatar Privilege Club",     "baseline_cpp": 2.00 },
+  { "program_code": "SQ",  "program_name": "Singapore KrisFlyer",      "baseline_cpp": 1.80 },
+  { "program_code": "BA",  "program_name": "British Airways Avios",    "baseline_cpp": 1.70 },
+  { "program_code": "IB",  "program_name": "Iberia Plus",              "baseline_cpp": 1.65 },
+  { "program_code": "VS",  "program_name": "Virgin Atlantic Flying Club", "baseline_cpp": 1.55 },
+  { "program_code": "NH",  "program_name": "ANA Mileage Club",         "baseline_cpp": 2.10 },
+  { "program_code": "EK",  "program_name": "Emirates Skywards",        "baseline_cpp": 1.40 },
+  { "program_code": "JL",  "program_name": "JAL Mileage Bank",         "baseline_cpp": 1.90 }
+]
