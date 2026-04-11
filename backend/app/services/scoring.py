@@ -12,9 +12,10 @@ logger = structlog.get_logger(__name__)
 def score_deal(
     xref:           dict[str, Any],
     google_result:  dict[str, Any] | None,
-    daily_stats:    dict[str, Any] | None,   # from price_daily_stats view
+    daily_stats:    dict[str, Any] | None,
     duffel_result:  dict[str, Any] | None,
     award_results:  list[dict] | None,
+    extra:          dict[str, Any] | None = None,  # price_slope_7d, arbitrage_pct
 ) -> dict[str, Any]:
     """
     Computes the full deal score (0–170 points) from cross-reference + stats.
@@ -29,9 +30,11 @@ def score_deal(
     score_percentile    = _score_percentile(best_price, daily_stats)
     score_zscore        = _score_zscore(best_price, daily_stats)
     score_trend_align   = _score_trend_alignment(best_price, google_result)
-    score_trend_dir     = 0.0   # Phase 3 — requires 7-day slope from TimescaleDB
+    slope = extra.get("price_slope_7d") if extra else None
+    score_trend_dir     = _score_trend_direction(slope)
     score_cross_source  = _score_cross_source(xref)
-    score_arbitrage     = 0.0   # Phase 3 — requires multi-airport comparison
+    arb_pct = extra.get("arbitrage_pct") if extra else None
+    score_arbitrage     = _score_arbitrage(arb_pct)
     score_fare_brand    = _score_fare_brand(best_price, duffel_result, daily_stats)
     score_scarcity      = _score_scarcity(xref.get("seats_remaining"))
     score_award         = _score_award(best_price, award_results)
@@ -186,10 +189,57 @@ def _score_fare_brand(price: float, duffel: dict | None, stats: dict | None) -> 
     return 0.0
 
 
-def _score_award(cash_price: float, awards: list[dict] | None) -> float:
-    """0–50 bonus points from award availability (Phase 3 full impl)."""
-    # Stub: Phase 3 will implement CPP calculation + scarcity + accessibility
+def _score_trend_direction(slope: float | None) -> float:
+    """0–10 points based on 7-day price slope ($/day, negative = falling)."""
+    if slope is None:
+        return 3.0  # neutral when no data
+    # Convert slope (per second) to per day
+    slope_per_day = slope * 86400
+    if slope_per_day < -50:   return 10.0   # falling fast
+    if slope_per_day < -20:   return  7.0   # dropping
+    if slope_per_day < 10:    return  3.0   # stable
+    if slope_per_day < 50:    return  0.0   # rising
+    return -5.0                              # spiking
+
+
+def _score_arbitrage(arbitrage_pct: float | None) -> float:
+    """0–10 points for savings between best and worst airport in the route."""
+    if arbitrage_pct is None:
+        return 0.0
+    if arbitrage_pct >= 30:  return 10.0
+    if arbitrage_pct >= 20:  return  7.0
+    if arbitrage_pct >= 10:  return  5.0
     return 0.0
+
+
+def _score_award(cash_price: float, awards: list[dict] | None) -> float:
+    """0–50 bonus points: CPP value (0-20) + scarcity (0-15) + accessibility (0-15)."""
+    if not awards:
+        return 0.0
+    best = awards[0]  # already sorted by CPP descending from award_analyzer
+
+    # CPP vs baseline
+    cpp_ratio = best.get("cpp_vs_baseline", 0)
+    if cpp_ratio >= 5:    cpp_score = 20.0
+    elif cpp_ratio >= 3:  cpp_score = 15.0
+    elif cpp_ratio >= 2:  cpp_score = 10.0
+    else:                 cpp_score =  0.0
+
+    # Award scarcity
+    seats = best.get("seats_available", 0)
+    if seats == 1:    scar_score = 15.0
+    elif seats == 2:  scar_score = 10.0
+    elif seats <= 4:  scar_score =  5.0
+    else:             scar_score =  0.0
+
+    # Transfer partner accessibility
+    n_programs = len(best.get("accessible_card_programs", []))
+    if n_programs >= 3:   acc_score = 15.0
+    elif n_programs == 2: acc_score = 12.0
+    elif n_programs == 1: acc_score =  8.0
+    else:                 acc_score =  0.0
+
+    return cpp_score + scar_score + acc_score
 
 
 def _action(total: float, is_gem: bool) -> str:

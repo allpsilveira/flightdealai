@@ -67,6 +67,39 @@ async def get_daily_stats(
         return None
 
 
+async def get_price_slope_7d(
+    db: AsyncSession,
+    route_id: UUID,
+    origin: str,
+    destination: str,
+    cabin_class: str,
+) -> float | None:
+    """
+    Returns the 7-day price trend slope ($/day).
+    Negative = prices falling (good). Positive = prices rising.
+    Returns None if insufficient data.
+    """
+    try:
+        result = await db.execute(
+            text("""
+                SELECT regr_slope(avg_price, EXTRACT(EPOCH FROM bucket)) AS slope
+                FROM price_daily_stats
+                WHERE route_id    = :route_id
+                  AND origin      = :origin
+                  AND destination = :destination
+                  AND cabin_class = :cabin_class
+                  AND bucket >= NOW() - INTERVAL '7 days'
+                HAVING COUNT(*) >= 3
+            """),
+            {"route_id": str(route_id), "origin": origin,
+             "destination": destination, "cabin_class": cabin_class},
+        )
+        row = result.first()
+        return float(row[0]) if row and row[0] is not None else None
+    except Exception:
+        return None
+
+
 async def get_data_age_days(
     db: AsyncSession,
     route_id: UUID,
