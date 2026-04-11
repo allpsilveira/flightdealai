@@ -18,13 +18,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # ── API keys ──────────────────────────────────────────────────────────────
-    amadeus_client_id: str = ""
-    amadeus_client_secret: str = ""
-    searchapi_api_key: str = ""
-    kiwi_api_key: str = ""
-    duffel_api_key: str = ""
-    seats_aero_api_key: str = ""
-    anthropic_api_key: str = ""
+    serpapi_api_key: str = ""       # SerpApi — Google Flights (primary scanner)
+    duffel_api_key: str = ""        # Duffel — on-demand fare brand enrichment
+    seats_aero_api_key: str = ""    # Seats.aero — on-demand award availability
+    anthropic_api_key: str = ""     # Claude AI advisor
 
     # ── Twilio ────────────────────────────────────────────────────────────────
     twilio_account_sid: str = ""

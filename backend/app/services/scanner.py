@@ -1,7 +1,10 @@
 """
-Scanner — main scan pipeline for Phase 2.
-Calls Tier 1 (Amadeus + Kiwi) and Tier 2 (SearchApi) clients,
-stores results to TimescaleDB, and returns a scan summary.
+Scanner — main scan pipeline.
+
+Sources:
+  SerpApi (Google Flights) — scheduled every 4h (quick) and 3x/day (full)
+  Duffel                   — on-demand when score >= 80 (see api/scan.py)
+  Seats.aero               — on-demand when score >= 80 (see api/scan.py)
 """
 import asyncio
 import structlog
@@ -11,12 +14,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services import amadeus_client, searchapi_client, kiwi_client
-from app.services.ingestion import (
-    store_amadeus_prices,
-    store_google_price,
-    store_kiwi_prices,
-)
+from app.services import serpapi_client
+from app.services.ingestion import store_google_price
 
 logger = structlog.get_logger(__name__)
 
@@ -29,161 +28,106 @@ async def scan_route(
     date_from: date,
     date_to: date,
     db: AsyncSession,
-    include_searchapi: bool = True,
+    deep: bool = True,
 ) -> dict[str, Any]:
     """
-    Full Tier 1 + Tier 2 scan for a route.
-    Runs all API calls concurrently, stores results, returns summary.
+    Scan a route via SerpApi (Google Flights).
+    deep=True → full scan: price + trends + price_level + price_history (3x/day)
+    deep=False → quick price check only, no history (every 4h tripwire)
+
+    Stores results to TimescaleDB and returns a scan summary.
     """
     scan_dates = _date_range(date_from, date_to, max_dates=5)
+
     results: dict[str, Any] = {
-        "route_id":    str(route_id),
-        "origins":     origins,
-        "destinations": destinations,
+        "route_id":      str(route_id),
+        "origins":       origins,
+        "destinations":  destinations,
         "cabin_classes": cabin_classes,
         "dates_scanned": [d.isoformat() for d in scan_dates],
-        "sources":     {},
-        "best_prices": [],
+        "scan_type":     "full" if deep else "quick",
+        "sources":       {"serpapi": 0},
+        "best_prices":   [],
     }
 
-    tasks = []
+    # Build tasks: one SerpApi call per (origin × dest × cabin × date)
+    tasks = [
+        _run_serpapi(route_id, origin, dest, dep_date, cabin, db, deep=deep)
+        for origin in origins
+        for dest in destinations
+        for cabin in cabin_classes
+        for dep_date in scan_dates
+    ]
 
-    # ── Tier 1: Amadeus (one call per origin×dest×cabin×date) ─────────────────
-    for origin in origins:
-        for dest in destinations:
-            for cabin in cabin_classes:
-                for dep_date in scan_dates:
-                    tasks.append(
-                        _run_amadeus(route_id, origin, dest, dep_date, cabin, db)
-                    )
-
-    # ── Tier 1: Kiwi (one call per cabin×date covers all origins+dests) ───────
-    for cabin in cabin_classes:
-        for dep_date in scan_dates:
-            tasks.append(
-                _run_kiwi(route_id, origins, destinations, dep_date, dep_date, cabin, db)
-            )
-
-    # ── Tier 2: SearchApi (one call per origin×dest×cabin) ───────────────────
-    if include_searchapi:
-        for origin in origins:
-            for dest in destinations:
-                for cabin in cabin_classes:
-                    tasks.append(
-                        _run_searchapi(route_id, origin, dest, scan_dates[0], cabin, db)
-                    )
-
-    # Run all concurrently
     task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Aggregate results
-    amadeus_prices, kiwi_prices, google_prices = [], [], []
+    google_prices: list[dict] = []
     for res in task_results:
         if isinstance(res, Exception):
             logger.warning("scan_task_error", error=str(res))
             continue
-        if res and res.get("source") == "amadeus":
-            amadeus_prices.extend(res.get("prices", []))
-        elif res and res.get("source") == "kiwi":
-            kiwi_prices.extend(res.get("prices", []))
-        elif res and res.get("source") == "google":
-            google_prices.append(res.get("price"))
+        if res and res.get("price"):
+            google_prices.append(res["price"])
 
-    results["sources"]["amadeus"] = len(amadeus_prices)
-    results["sources"]["kiwi"]    = len(kiwi_prices)
-    results["sources"]["google"]  = len([p for p in google_prices if p])
-
-    # Compute best prices per (origin, dest, cabin, date)
-    results["best_prices"] = _compute_best_prices(amadeus_prices, kiwi_prices, google_prices)
+    results["sources"]["serpapi"] = len(google_prices)
+    results["best_prices"] = _compute_best_prices(google_prices)
 
     logger.info(
         "scan_complete",
         route_id=str(route_id),
-        amadeus=results["sources"]["amadeus"],
-        kiwi=results["sources"]["kiwi"],
-        google=results["sources"]["google"],
+        type="full" if deep else "quick",
+        prices_found=len(google_prices),
         best_count=len(results["best_prices"]),
     )
     return results
 
 
-# ── Internal task runners ──────────────────────────────────────────────────────
+# ── Internal helpers ───────────────────────────────────────────────────────────
 
-async def _run_amadeus(
-    route_id, origin, dest, dep_date, cabin, db
+async def _run_serpapi(
+    route_id: uuid.UUID,
+    origin: str,
+    dest: str,
+    dep_date: date,
+    cabin: str,
+    db: AsyncSession,
+    deep: bool = True,
 ) -> dict | None:
-    prices = await amadeus_client.search_flights(origin, dest, dep_date, cabin)
-    if prices:
-        await store_amadeus_prices(route_id, prices, db)
-    return {"source": "amadeus", "prices": prices or []}
-
-
-async def _run_kiwi(
-    route_id, origins, dests, date_from, date_to, cabin, db
-) -> dict | None:
-    prices = await kiwi_client.search_flights(origins, dests, date_from, date_to, cabin)
-    if prices:
-        await store_kiwi_prices(route_id, prices, db)
-    return {"source": "kiwi", "prices": prices or []}
-
-
-async def _run_searchapi(
-    route_id, origin, dest, dep_date, cabin, db
-) -> dict | None:
-    price = await searchapi_client.search_flights(origin, dest, dep_date, cabin)
-    if price:
+    price = await serpapi_client.search_flights(origin, dest, dep_date, cabin, deep=deep)
+    if price and price.get("price_usd", 0) > 0:
         await store_google_price(route_id, price, db)
-    return {"source": "google", "price": price}
+    return {"price": price}
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _date_range(date_from: date, date_to: date, max_dates: int = 5) -> list[date]:
-    """Returns up to max_dates evenly-spaced dates between date_from and date_to."""
+    """Returns up to max_dates evenly-spaced dates within the range."""
     delta = (date_to - date_from).days
     if delta <= 0:
         return [date_from]
     step = max(1, delta // (max_dates - 1)) if max_dates > 1 else delta
-    dates = []
-    current = date_from
+    dates, current = [], date_from
     while current <= date_to and len(dates) < max_dates:
         dates.append(current)
         current += timedelta(days=step)
     return dates
 
 
-def _compute_best_prices(
-    amadeus: list[dict],
-    kiwi: list[dict],
-    google: list[dict | None],
-) -> list[dict]:
-    """Find the best (lowest) price per (origin, dest, cabin, date) across all sources."""
+def _compute_best_prices(prices: list[dict]) -> list[dict]:
+    """Return the best (lowest) price per (origin, dest, cabin, date)."""
     best: dict[tuple, dict] = {}
-
-    def _update(key, price_usd, source, record):
-        if price_usd and price_usd > 0:
-            if key not in best or price_usd < best[key]["price_usd"]:
-                best[key] = {
-                    "origin":         key[0],
-                    "destination":    key[1],
-                    "cabin_class":    key[2],
-                    "departure_date": key[3],
-                    "price_usd":      price_usd,
-                    "source":         source,
-                    "airline_codes":  record.get("airline_codes", []),
-                }
-
-    for r in amadeus:
+    for r in prices:
+        if not r or not r.get("price_usd"):
+            continue
         key = (r["origin"], r["destination"], r["cabin_class"], str(r["departure_date"]))
-        _update(key, r.get("price_usd"), "amadeus", r)
-
-    for r in kiwi:
-        key = (r["origin"], r["destination"], r["cabin_class"], str(r["departure_date"]))
-        _update(key, r.get("price_usd"), "kiwi", r)
-
-    for r in google:
-        if r:
-            key = (r["origin"], r["destination"], r["cabin_class"], str(r["departure_date"]))
-            _update(key, r.get("price_usd"), "google", r)
-
+        if key not in best or r["price_usd"] < best[key]["price_usd"]:
+            best[key] = {
+                "origin":         r["origin"],
+                "destination":    r["destination"],
+                "cabin_class":    r["cabin_class"],
+                "departure_date": str(r["departure_date"]),
+                "price_usd":      r["price_usd"],
+                "price_level":    r.get("price_level"),
+                "airline_codes":  r.get("airline_codes", []),
+                "source":         "serpapi",
+            }
     return sorted(best.values(), key=lambda x: x["price_usd"])
