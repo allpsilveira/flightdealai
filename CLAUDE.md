@@ -6,7 +6,7 @@
 
 ## What This Is
 
-FlightDeal AI is a personal luxury travel deal intelligence platform. It monitors Business, First, and Premium Economy class fares across 5 data sources, cross-references them, scores deals using dynamic statistics, compares cash vs award miles, overlays cabin quality context, and delivers recommendations via a beautiful web dashboard + WhatsApp alerts.
+FlightDeal AI is a personal luxury travel deal intelligence platform. It monitors Business, First, and Premium Economy class fares across 3 data sources, scores deals using dynamic statistics, compares cash vs award miles, overlays cabin quality context, and delivers recommendations via a beautiful web dashboard + WhatsApp alerts.
 
 **Owner:** Gabriel — dual US-Brazilian citizen based in Fort Myers, FL. Primary corridor is MIA/MCO/FLL → GRU/CNF but the system supports any route added dynamically through the UI.
 
@@ -36,54 +36,30 @@ FlightDeal AI is a personal luxury travel deal intelligence platform. It monitor
 
 ---
 
-## Data Sources (5 Total)
+## Data Sources (3 Active)
 
-### Source 1: Amadeus Self-Service — FREE TRIPWIRE (runs every 2 hours)
-- **Role:** Continuous price monitoring at zero cost. Detects price changes. Provides seats remaining, booking class letters, cheapest date calendar.
-- **Auth:** OAuth2 (client_id + client_secret)
-- **Python SDK:** `amadeus`
-- **Key endpoints:** Flight Offers Search (cabin filter: BUSINESS, FIRST, PREMIUM_ECONOMY), Flight Cheapest Date Search
-- **Key unique data:** `numberOfBookableSeats`, `booking_class` letter (J/C/D/Z), `brandedFare`, cheapest price per day in a month
-- **Free tier:** 2,000-10,000 calls/month depending on endpoint
-- **Search params:**
-```python
-amadeus.shopping.flight_offers_search.get(
-    originLocationCode=origin, destinationLocationCode=dest,
-    departureDate=date, adults=1, travelClass=cabin,
-    nonStop=False, max=20, currencyCode="USD"
-)
-```
+> **Note:** Amadeus self-service was decommissioned July 2026. Kiwi Tequila closed public registration.
+> Stack was revised to 3 confirmed working sources.
 
-### Source 2: SearchApi.io (Google Flights) — TREND INTELLIGENCE (runs 3x/day + on-demand)
-- **Role:** Only source of Google's price trend data. Returns price_level (low/typical/high), typical_price_range, price_history (weeks of timestamped prices).
-- **Auth:** API key as query param or Bearer header
-- **Cost:** $40/month for 10,000 searches
-- **Key unique data:** `price_insights.price_level`, `price_insights.typical_price_range`, `price_insights.price_history`, booking options with OTA pricing
+### Source 1: SerpApi (Google Flights) — PRIMARY SCANNER (runs every 4h + 3x/day full)
+- **Role:** Primary and only scheduled scan source. Quick checks every 4h detect price changes. Full scans 3x/day capture trend intelligence.
+- **Auth:** `api_key` query param
+- **Cost:** $25/month (Starter — 1,000 searches/month, covers 5 routes at 3x/day)
+- **Key unique data:** `price_insights.price_level` (low/typical/high), `price_insights.typical_price_range`, `price_insights.price_history` (timestamped array)
+- **Cabin codes:** 1=Economy, 2=Premium Economy, 3=Business, 4=First
 - **Search params:**
 ```python
 {
     "engine": "google_flights",
+    "api_key": serpapi_key,
     "departure_id": origin, "arrival_id": dest,
     "outbound_date": date, "type": "2",  # one-way
     "travel_class": "3",  # 3=business, 4=first, 2=premium_economy
-    "stops": "2", "currency": "USD", "deep_search": "true"
+    "stops": "2", "currency": "USD", "hl": "en"
 }
 ```
 
-### Source 3: Kiwi.com Tequila — CREATIVE ROUTING (runs 3x/day)
-- **Role:** Finds routes nobody else shows via Virtual Interlining. Accepts multiple origins+destinations in one call.
-- **Auth:** API key in `apikey` header
-- **Cost:** Free
-- **Key unique data:** `virtual_interlining` flag, `has_airport_change`, `technical_stops`, `deep_link` for booking
-- **Endpoint:** `https://tequila-api.kiwi.com/v2/search`
-- **Search params:**
-```
-fly_from=MIA,MCO,FLL&fly_to=GRU,CNF&date_from={start}&date_to={end}
-&flight_type=oneway&selected_cabins=C&max_stopovers=2&curr=USD&sort=price&limit=20
-```
-- **Cabin codes:** M=economy, W=premium_economy, C=business, F=first
-
-### Source 4: Duffel — FARE BRAND DETAIL (on-demand, when deal detected)
+### Source 2: Duffel — FARE BRAND DETAIL (on-demand, when deal detected)
 - **Role:** Only source of fare brand names ("Business Lite"), offer expiry timestamps, detailed conditions, ancillaries. Fires when Amadeus/SearchApi detects a potential deal.
 - **Auth:** Bearer token
 - **Python SDK:** `duffel-api`
@@ -100,7 +76,7 @@ duffel.offer_requests.create({
 })
 ```
 
-### Source 5: Seats.aero — AWARD AVAILABILITY (on-demand, when deal detected)
+### Source 3: Seats.aero — AWARD AVAILABILITY (on-demand, when deal detected)
 - **Role:** Award/miles availability across 24 loyalty programs. When a cash deal is found, check if the same route has award space and calculate cents-per-point value.
 - **Auth:** `Partner-Authorization: pro_xxxxx` header
 - **Cost:** $10/month (Pro subscription, flat)
@@ -125,20 +101,15 @@ duffel.offer_requests.create({
 **NOT brute-force. Intelligent tiered scanning.**
 
 ```
-TIER 1 — TRIPWIRE (free/cheap, runs continuously):
-  Amadeus: every 2 hours → detect price changes
-  Kiwi: every 8 hours → detect creative routing opportunities
+TIER 1 — SCHEDULED (SerpApi, $25/mo flat):
+  Every 4h  → quick price check (detect changes, low API cost)
+  3x/day    → full scan: price + price_level + price_history + typical_range
 
-TIER 2 — DEEP SCAN (paid, runs on schedule + on-demand):
-  SearchApi.io: 3x/day (morning, afternoon, night) → trend intelligence
-  ALSO triggered when Tier 1 detects >5% price drop from last known
+TIER 2 — ON-DEMAND (fires only when score ≥ 80 or GEM detected):
+  Duffel     → fare brand name, conditions, expiry (~$2-5/mo)
+  Seats.aero → award availability + CPP calculation ($10/mo flat)
 
-TIER 3 — ENRICHMENT (paid, on-demand only):
-  Duffel: ONLY when a potential deal is detected → get fare brand, conditions, expiry
-  Seats.aero: ONLY when a potential deal is detected → check award availability
-
-COST PER ROUTE: ~$4-8/month
-TOTAL FOR 5 ROUTES: ~$30-40/month + $10 Seats.aero flat + $7 Hostinger = ~$50/month
+TOTAL: ~$37-40/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2-5)
 ```
 
 ---
@@ -469,10 +440,7 @@ AIRFLOW_ADMIN_PASSWORD=
 AIRFLOW_FERNET_KEY=
 
 # APIs
-AMADEUS_CLIENT_ID=
-AMADEUS_CLIENT_SECRET=
-SEARCHAPI_API_KEY=
-KIWI_API_KEY=
+SERPAPI_API_KEY=
 DUFFEL_API_KEY=
 SEATS_AERO_API_KEY=
 ANTHROPIC_API_KEY=
