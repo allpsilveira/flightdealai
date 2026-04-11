@@ -1,59 +1,48 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        // ── Luxury palette ────────────────────────────────────────────────────
-        navy: {
-          50:  "#eef2ff",
-          100: "#e0e7ff",
-          200: "#c7d2fe",
-          300: "#a5b4fc",
-          400: "#818cf8",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#1e1b4b",
-          900: "#0f0e2a",
-          950: "#080716",
+        // ── Brand orange ──────────────────────────────────────────────────────
+        brand: {
+          50:  "#fff7ed",
+          100: "#ffedd5",
+          200: "#fed7aa",
+          300: "#fdba74",
+          400: "#fb923c",
+          500: "#f26419",  // primary
+          600: "#ea580c",  // hover
+          700: "#c2410c",
+          800: "#9a3412",
+          900: "#7c2d12",
         },
-        gold: {
-          50:  "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#f5c842",  // champagne accent
-          500: "#d4a843",  // warm gold — primary accent
-          600: "#b8860b",  // dark goldenrod
-          700: "#92400e",
-          800: "#78350f",
-          900: "#451a03",
-        },
-        surface: {
-          DEFAULT: "#12112a",  // card background
-          hover:   "#1a1935",
-          border:  "#2a2750",
+        // ── Warm sand (beige) — light mode surfaces ───────────────────────────
+        sand: {
+          50:  "#faf8f5",
+          100: "#f5f0e8",
+          200: "#ede5d8",
+          300: "#e0d4c0",
+          400: "#c9b99a",
         },
       },
       fontFamily: {
-        serif: ["Cormorant Garamond", "Playfair Display", "Georgia", "serif"],
-        sans:  ["DM Sans", "Outfit", "system-ui", "sans-serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
       },
-      backgroundImage: {
-        "luxury-gradient": "linear-gradient(135deg, #0f0e2a 0%, #1a183d 50%, #0d1b2a 100%)",
-        "gold-gradient":   "linear-gradient(135deg, #d4a843 0%, #f5c842 50%, #d4a843 100%)",
-        "card-glass":      "linear-gradient(135deg, rgba(26,25,53,0.8) 0%, rgba(18,17,42,0.9) 100%)",
+      fontSize: {
+        "2xs": ["0.65rem", { lineHeight: "1rem" }],
       },
       boxShadow: {
-        "luxury": "0 4px 24px rgba(0,0,0,0.4), 0 1px 0 rgba(212,168,67,0.15)",
-        "gold":   "0 0 20px rgba(212,168,67,0.3)",
-        "card":   "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)",
+        "card-light": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+        "card-hover": "0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)",
+        "card-dark":  "0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2)",
+        "brand":      "0 4px 14px rgba(242,100,25,0.35)",
       },
       animation: {
-        "fade-in":    "fadeIn 0.4s ease-out",
-        "slide-up":   "slideUp 0.3s ease-out",
-        "pulse-gold": "pulseGold 2s ease-in-out infinite",
+        "fade-in":  "fadeIn 0.3s ease-out",
+        "slide-up": "slideUp 0.25s ease-out",
+        "pulse-brand": "pulseBrand 2s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -61,12 +50,12 @@ export default {
           "100%": { opacity: "1" },
         },
         slideUp: {
-          "0%":   { opacity: "0", transform: "translateY(12px)" },
+          "0%":   { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        pulseGold: {
-          "0%, 100%": { boxShadow: "0 0 8px rgba(212,168,67,0.4)" },
-          "50%":       { boxShadow: "0 0 24px rgba(212,168,67,0.8)" },
+        pulseBrand: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(242,100,25,0.3)" },
+          "50%":      { boxShadow: "0 0 0 6px rgba(242,100,25,0)" },
         },
       },
     },

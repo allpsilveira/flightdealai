@@ -1,44 +1,53 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/useAuth";
+import { useDarkMode } from "../hooks/useDarkMode";
 import clsx from "clsx";
 
 const NAV = [
-  { to: "/",         label: "Deal Feed",        icon: "✦" },
-  { to: "/routes",   label: "Routes",            icon: "◈" },
-  { to: "/prices",   label: "Price History",     icon: "◇" },
-  { to: "/airports", label: "Airport Compare",   icon: "◉" },
-  { to: "/alerts",   label: "Alerts",            icon: "◎" },
-  { to: "/settings", label: "Settings",          icon: "⊙" },
+  { to: "/",         label: "Deal Feed",       icon: <IconDeals /> },
+  { to: "/routes",   label: "Routes",           icon: <IconRoutes /> },
+  { to: "/prices",   label: "Price History",    icon: <IconChart /> },
+  { to: "/airports", label: "Airport Compare",  icon: <IconMap /> },
+  { to: "/alerts",   label: "Alerts",           icon: <IconBell /> },
+  { to: "/settings", label: "Settings",         icon: <IconSettings /> },
 ];
 
 export default function Layout() {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const user    = useAuthStore((s) => s.user);
+  const logout  = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const [dark, setDark] = useDarkMode();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
-  };
+  const handleLogout = () => { logout(); navigate("/login"); };
 
   return (
-    <div className="flex min-h-screen">
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-      <aside className="w-64 flex-shrink-0 flex flex-col bg-navy-900 border-r border-surface-border">
+    <div className="flex min-h-screen bg-sand-50 dark:bg-zinc-950">
+      {/* ── Sidebar ────────────────────────────────────────────────────────── */}
+      <aside className="w-60 flex-shrink-0 flex flex-col
+                        bg-white dark:bg-zinc-900
+                        border-r border-zinc-200 dark:border-zinc-800">
+
         {/* Logo */}
-        <div className="px-6 pt-8 pb-6">
-          <h1 className="font-serif text-2xl font-light tracking-wider text-white">
-            Flight<span className="text-gold-500">Deal</span>
-          </h1>
-          <p className="text-xs text-white/30 font-sans mt-0.5 tracking-widest uppercase">
-            AI Intelligence
-          </p>
+        <div className="px-5 pt-7 pb-5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-brand-500 flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 10L7 2L12 10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="7" cy="11.5" r="1.5" fill="white"/>
+              </svg>
+            </div>
+            <div>
+              <span className="text-sm font-semibold text-zinc-900 dark:text-white tracking-tight">
+                FlightDeal<span className="text-brand-500"> AI</span>
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="gold-rule mx-6 mb-6" />
+        <div className="divider mx-4 mb-4" />
 
-        {/* Nav links */}
-        <nav className="flex-1 px-3 space-y-1">
+        {/* Nav */}
+        <nav className="flex-1 px-3 space-y-0.5">
           {NAV.map(({ to, label, icon }) => (
             <NavLink
               key={to}
@@ -46,32 +55,104 @@ export default function Layout() {
               end={to === "/"}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-sans font-medium transition-all duration-150",
+                  "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150",
                   isActive
-                    ? "bg-gold-500/15 text-gold-400 border border-gold-500/20"
-                    : "text-white/50 hover:text-white/80 hover:bg-surface-hover"
+                    ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                    : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100"
                 )
               }
             >
-              <span className="text-base">{icon}</span>
+              <span className="w-4 h-4 flex-shrink-0">{icon}</span>
               {label}
             </NavLink>
           ))}
         </nav>
 
-        {/* User footer */}
-        <div className="px-4 pb-6 pt-4 border-t border-surface-border">
-          <p className="text-xs text-white/30 font-sans truncate mb-2">{user?.email}</p>
-          <button onClick={handleLogout} className="btn-ghost w-full justify-center text-xs py-2">
-            Sign out
+        {/* Footer */}
+        <div className="px-3 pb-5 pt-4 space-y-1">
+          <div className="divider mb-3" />
+
+          {/* Dark mode toggle */}
+          <button
+            onClick={() => setDark(!dark)}
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm
+                       text-zinc-500 dark:text-zinc-400
+                       hover:bg-zinc-50 dark:hover:bg-zinc-800
+                       hover:text-zinc-900 dark:hover:text-zinc-100
+                       transition-all duration-150"
+          >
+            <span className="w-4 h-4 flex-shrink-0">
+              {dark ? <IconSun /> : <IconMoon />}
+            </span>
+            {dark ? "Light mode" : "Dark mode"}
           </button>
+
+          {/* User + logout */}
+          <div className="px-3 py-2">
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 truncate mb-2">
+              {user?.email}
+            </p>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
+      {/* ── Main ────────────────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>
   );
+}
+
+/* ── Inline SVG icons ────────────────────────────────────────────────────── */
+function IconDeals() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>
+    <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
+  </svg>;
+}
+function IconRoutes() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="3" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/>
+    <path d="M4.5 8h7"/>
+    <path d="M8 4.5l2 2-2 2"/>
+  </svg>;
+}
+function IconChart() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <polyline points="2,12 5,7 8,9 11,5 14,8"/>
+  </svg>;
+}
+function IconMap() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M8 2C5.8 2 4 3.8 4 6c0 3 4 8 4 8s4-5 4-8c0-2.2-1.8-4-4-4z"/>
+    <circle cx="8" cy="6" r="1.2" fill="currentColor" stroke="none"/>
+  </svg>;
+}
+function IconBell() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M8 2a4 4 0 0 1 4 4v2l1 2H3l1-2V6a4 4 0 0 1 4-4z"/>
+    <path d="M6.5 12a1.5 1.5 0 0 0 3 0"/>
+  </svg>;
+}
+function IconSettings() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+  </svg>;
+}
+function IconSun() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+  </svg>;
+}
+function IconMoon() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <path d="M13.5 9A6 6 0 0 1 7 2.5a6 6 0 1 0 6.5 6.5z"/>
+  </svg>;
 }
