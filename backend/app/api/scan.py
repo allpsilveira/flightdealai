@@ -165,6 +165,7 @@ async def manual_scan(
 async def scan_saved_route(
     route_id: uuid.UUID,
     force_enrich: bool = True,
+    trigger_type: str = Query(default="manual"),  # manual | scheduled | airflow
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -172,6 +173,7 @@ async def scan_saved_route(
     Trigger a scan for a saved route. This is the "Scan Now" button endpoint.
     force_enrich=True (default) — calls all three sources.
     force_enrich=False — used by the 4h background scheduler (SerpApi only).
+    trigger_type — "manual" (user-initiated) | "scheduled" (Airflow/cron).
     """
     result = await db.execute(select(Route).where(Route.id == route_id))
     route = result.scalar_one_or_none()
@@ -187,7 +189,7 @@ async def scan_saved_route(
         date_to=route.date_to,
         deep=True,
         db=db,
-        trigger_type="manual",
+        trigger_type=trigger_type,
         force_enrich=force_enrich,
     )
 
