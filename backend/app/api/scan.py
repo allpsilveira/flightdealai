@@ -194,14 +194,18 @@ async def scan_saved_route(
 
 @router.get("/history", response_model=list[ScanHistoryResponse])
 async def scan_history(
+    route_id: uuid.UUID | None = Query(default=None),
     limit: int = 50,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns recent scan history, newest first."""
-    result = await db.execute(
+    """Returns recent scan history, newest first. Optionally filtered by route_id."""
+    stmt = (
         select(ScanHistory)
         .order_by(desc(ScanHistory.triggered_at))
         .limit(limit)
     )
+    if route_id:
+        stmt = stmt.where(ScanHistory.route_id == route_id)
+    result = await db.execute(stmt)
     return result.scalars().all()

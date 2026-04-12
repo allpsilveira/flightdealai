@@ -9,12 +9,30 @@ const CABIN_LABEL = {
   BUSINESS: "Business", FIRST: "First Class", PREMIUM_ECONOMY: "Premium Economy",
 };
 const AIRLINE_NAME = {
+  // North / Central America
   AA: "American Airlines", UA: "United Airlines", DL: "Delta Air Lines",
-  LA: "LATAM Airlines",    QR: "Qatar Airways",   EK: "Emirates",
-  LH: "Lufthansa",         BA: "British Airways", AF: "Air France",
-  SQ: "Singapore Airlines",CX: "Cathay Pacific",  NH: "ANA",
-  JL: "JAL",               TK: "Turkish Airlines",AZ: "ITA Airways",
-  G3: "GOL",               AD: "Azul",            JJ: "TAM",
+  WN: "Southwest",         B6: "JetBlue",         AS: "Alaska Airlines",
+  CM: "Copa Airlines",     AM: "Aeroméxico",       MX: "Mexicana",
+  // South America
+  LA: "LATAM Airlines",    G3: "GOL",              AD: "Azul",
+  JJ: "LATAM Brasil",      AV: "Avianca",          AR: "Aerolíneas Argentinas",
+  H2: "Sky Airline",
+  // Europe
+  BA: "British Airways",   AF: "Air France",       LH: "Lufthansa",
+  KL: "KLM",               IB: "Iberia",           TP: "TAP Air Portugal",
+  LX: "Swiss",             OS: "Austrian",          AZ: "ITA Airways",
+  VS: "Virgin Atlantic",   TK: "Turkish Airlines",  SK: "SAS",
+  AY: "Finnair",
+  // Middle East / Africa
+  EK: "Emirates",          QR: "Qatar Airways",    EY: "Etihad",
+  ET: "Ethiopian Airlines",MS: "EgyptAir",
+  // Asia / Pacific
+  SQ: "Singapore Airlines",CX: "Cathay Pacific",   NH: "ANA",
+  JL: "JAL",               TG: "Thai Airways",     MH: "Malaysia Airlines",
+  OZ: "Asiana",            KE: "Korean Air",        CI: "China Airlines",
+  BR: "EVA Air",           AI: "Air India",
+  // Canada
+  AC: "Air Canada",        QF: "Qantas",            NZ: "Air New Zealand",
 };
 
 const CABIN_BY_AIRLINE = cabinQuality.reduce((acc, e) => {
@@ -96,6 +114,16 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
   const savings    = typicalMid ? Math.round(typicalMid - deal.best_price_usd) : null;
   const savingsPct = typicalMid && savings > 0 ? Math.round((savings / typicalMid) * 100) : null;
 
+  // Google Flights booking link
+  const cabinSearchLabel = {
+    BUSINESS: "business class", FIRST: "first class", PREMIUM_ECONOMY: "premium economy",
+  };
+  const googleFlightsUrl = deal.origin && deal.destination && deal.departure_date
+    ? `https://www.google.com/travel/flights?q=flights+${
+        encodeURIComponent(cabinSearchLabel[deal.cabin_class] ?? "business class")
+      }+${deal.origin}+to+${deal.destination}+on+${deal.departure_date}`
+    : null;
+
   const scoreRows = [
     { label: "Percentile (18)",     value: Math.round((deal.score_percentile / 30) * 18),     max: 18 },
     { label: "Z-score (12)",        value: Math.round((deal.score_zscore / 20) * 12),          max: 12 },
@@ -156,7 +184,7 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
         <div className="p-5 space-y-5">
 
           {/* Price + date */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-3xl font-bold text-zinc-900 dark:text-white tabular-nums">
                 ${deal.best_price_usd?.toLocaleString()}
@@ -168,11 +196,30 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                 {deal.is_direct ? " · Direct" : " · Connecting"}
               </p>
             </div>
-            {deal.is_gem && (
-              <div className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-bold">
-                ✦ GEM
-              </div>
-            )}
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              {deal.is_gem && (
+                <div className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-bold">
+                  ✦ GEM
+                </div>
+              )}
+              {googleFlightsUrl && (
+                <a
+                  href={googleFlightsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                             bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M2 8l5-5 1.5 1.5L5 8l3.5 3.5L7 13 2 8zm7 0l5-5 1.5 1.5L12 8l3.5 3.5L14 13 9 8z"
+                          fillOpacity=".4"/>
+                    <path d="M4 8l4-4 4 4-4 4-4-4z" fillOpacity=".0"/>
+                    <path fillRule="evenodd" d="M2.5 2.5a1 1 0 011-1h9a1 1 0 011 1v9a1 1 0 01-1 1h-3.5v-1.5H12v-8h-8v3.5H2.5v-4z"/>
+                  </svg>
+                  Search Google Flights ↗
+                </a>
+              )}
+            </div>
           </div>
 
           {/* Savings vs Google */}
@@ -267,30 +314,42 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                   {loadingEnrich ? (
                     <p className="text-2xs text-zinc-400 mt-0.5">Loading…</p>
                   ) : enrichment?.awards?.length > 0 ? (
-                    <p className="text-2xs text-zinc-400 mt-0.5">
-                      via {enrichment.awards[0].loyalty_program}
-                      {enrichment.awards[0].seats_available <= 3 && (
-                        <span className="text-amber-500 ml-1">
-                          · {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} left
-                        </span>
+                    <div className="mt-0.5 space-y-0.5">
+                      <p className="text-2xs text-zinc-500 dark:text-zinc-400">
+                        via {enrichment.awards[0].loyalty_program}
+                      </p>
+                      {enrichment.awards[0].cash_taxes_usd > 0 && (
+                        <p className="text-2xs text-zinc-400">
+                          + ${enrichment.awards[0].cash_taxes_usd.toLocaleString()} taxes
+                        </p>
+                      )}
+                      {enrichment.awards[0].seats_available <= 4 && (
+                        <p className="text-2xs font-semibold text-amber-600 dark:text-amber-400">
+                          ⚡ {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} left
+                        </p>
                       )}
                       {xfers.length > 0 && (
-                        <span className="ml-1">· Transfer: {xfers.slice(0, 2).join(", ")}</span>
+                        <p className="text-2xs text-zinc-400">
+                          Transfer from: {xfers.slice(0, 2).join(", ")}
+                        </p>
                       )}
-                    </p>
+                    </div>
                   ) : (
-                    <p className="text-2xs text-zinc-400 mt-0.5">Run "Scan Now" to load</p>
+                    <p className="text-2xs text-zinc-400 mt-0.5">
+                      Run "Scan Now" to check award space
+                    </p>
                   )}
                 </div>
-                <div className="text-right">
+                <div className="text-right flex-shrink-0 ml-4">
                   {enrichment?.awards?.length > 0 ? (
                     <>
                       <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
-                        {enrichment.awards[0].miles_cost.toLocaleString()} pts
+                        {enrichment.awards[0].miles_cost.toLocaleString()}
+                        <span className="text-xs font-normal text-zinc-400 ml-0.5">pts</span>
                       </p>
-                      {enrichment.awards[0].cpp_value && (
-                        <p className="text-2xs text-brand-500">
-                          {enrichment.awards[0].cpp_value.toFixed(1)}¢/pt
+                      {enrichment.awards[0].cpp_value != null && (
+                        <p className="text-xs font-bold text-brand-500 tabular-nums">
+                          {enrichment.awards[0].cpp_value.toFixed(2)}¢/pt
                         </p>
                       )}
                     </>
@@ -301,6 +360,51 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
               </div>
             </div>
           </div>
+
+          {/* Award Programs — full breakdown if multiple available */}
+          {!loadingEnrich && enrichment?.awards?.length > 1 && (
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+                All Award Options
+              </p>
+              <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
+                              divide-y divide-zinc-100 dark:divide-zinc-700/60">
+                {enrichment.awards.map((award, i) => (
+                  <div
+                    key={`${award.loyalty_program}-${i}`}
+                    className={`flex items-center justify-between px-4 py-3 ${
+                      i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"
+                    }`}
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-900 dark:text-white">
+                        {award.loyalty_program}
+                        {i === 0 && (
+                          <span className="ml-2 text-2xs text-emerald-600 dark:text-emerald-400 font-bold">Best</span>
+                        )}
+                      </p>
+                      <p className="text-2xs text-zinc-400 mt-0.5">
+                        {award.seats_available} seat{award.seats_available !== 1 ? "s" : ""}
+                        {award.operating_airline && ` · ${award.operating_airline}`}
+                        {award.cash_taxes_usd > 0 && ` · $${award.cash_taxes_usd.toLocaleString()} taxes`}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-4">
+                      <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
+                        {award.miles_cost.toLocaleString()}
+                        <span className="text-xs font-normal text-zinc-400 ml-0.5">pts</span>
+                      </p>
+                      {award.cpp_value != null && (
+                        <p className="text-2xs text-brand-500 tabular-nums font-semibold">
+                          {award.cpp_value.toFixed(2)}¢/pt
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Airport comparison (embedded) */}
           {routeOrigins.length > 1 && (

@@ -39,13 +39,14 @@ export default function RouteDetail() {
   const navigate = useNavigate();
   const { routes, scanning, scanMeta, fetchRoutes, scanRoute } = useRoutesStore();
 
-  const [deals,       setDeals]       = useState([]);
-  const [priceHistory, setPriceHistory] = useState([]);
-  const [historyDays,  setHistoryDays]  = useState(30);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [selectedDeal, setSelectedDeal] = useState(null);
-  const [cabinFilter,  setCabinFilter]  = useState(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deals,          setDeals]          = useState([]);
+  const [bestOffers,     setBestOffers]      = useState([]);
+  const [priceHistory,   setPriceHistory]    = useState([]);
+  const [historyDays,    setHistoryDays]     = useState(30);
+  const [historyLoading, setHistoryLoading]  = useState(false);
+  const [selectedDeal,   setSelectedDeal]    = useState(null);
+  const [cabinFilter,    setCabinFilter]     = useState(null);
+  const [deleting,       setDeleting]        = useState(false);
 
   const route = routes.find((r) => r.id === id) ?? null;
 
@@ -61,6 +62,16 @@ export default function RouteDetail() {
       .then((r) => setDeals(r.data))
       .catch(() => setDeals([]));
   }, [id]);
+
+  // Load per-airline flight offers for the best deal (powers AirlineLeaderboard)
+  useEffect(() => {
+    const visible = cabinFilter ? deals.filter((d) => d.cabin_class === cabinFilter) : deals;
+    const best = visible[0] ?? null;
+    if (!best) { setBestOffers([]); return; }
+    api.get(`/deals/${best.id}/offers`)
+      .then((r) => setBestOffers(r.data))
+      .catch(() => setBestOffers([]));
+  }, [deals, cabinFilter]);
 
   // Load price history
   useEffect(() => {
@@ -313,7 +324,8 @@ export default function RouteDetail() {
             </p>
             <div className="card p-2">
               <AirlineLeaderboard
-                deals={filteredDeals}
+                offers={bestOffers}
+                parentDeal={bestDeal}
                 onSelect={setSelectedDeal}
                 selectedDeal={selectedDeal}
               />

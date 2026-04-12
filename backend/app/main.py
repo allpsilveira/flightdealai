@@ -6,6 +6,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import get_settings
 from app.api import auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks
+from app.services.daily_scheduler import create_scheduler
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -14,7 +15,15 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("FlyLuxuryDeals backend starting up")
+
+    # Start daily route scanner (7 AM UTC, all active routes, force_enrich=True)
+    scheduler = create_scheduler(str(settings.database_url))
+    scheduler.start()
+    logger.info("daily_scheduler_started")
+
     yield
+
+    scheduler.shutdown(wait=False)
     logger.info("FlyLuxuryDeals backend shutting down")
 
 
