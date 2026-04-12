@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useRoutesStore } from "../stores/useRoutes";
+import allAirports from "../data/airports.json";
 
-const AIRPORTS = [
+const AIRPORT_CODES = [
   "MIA", "MCO", "FLL", "TPA", "JFK", "EWR", "LAX", "ORD", "DFW", "ATL",
   "GRU", "CNF", "BSB", "REC", "FOR", "SSA", "CWB", "POA", "GIG", "SDU",
 ];
+
+const AIRPORT_MAP = Object.fromEntries(allAirports.map((a) => [a.iata, a]));
 
 const CABINS = [
   { value: "BUSINESS",        label: "Business" },
@@ -13,9 +16,9 @@ const CABINS = [
 ];
 
 const TRIP_TYPES = [
-  { value: "ONE_WAY",      label: "One-way",        desc: "Single direction only" },
-  { value: "ROUND_TRIP",   label: "Round trip",     desc: "Outbound + return on same route" },
-  { value: "MONITOR_BOTH", label: "Monitor both ★", desc: "Outbound + return tracked separately (recommended)" },
+  { value: "ONE_WAY",    label: "One-way",        desc: "Single direction only" },
+  { value: "ROUND_TRIP", label: "Round trip",     desc: "Outbound + return on same route" },
+  { value: "MONITOR",    label: "Monitor both ★", desc: "Outbound + return tracked separately (recommended)" },
 ];
 
 const STEPS = ["Origins", "Destinations", "Trip Type", "Cabin", "Dates"];
@@ -24,24 +27,35 @@ const EMPTY = {
   name: "",
   origins: [],
   destinations: [],
-  trip_type: "MONITOR_BOTH",
+  trip_type: "MONITOR",
   cabin_classes: [],
   date_from: "",
   date_to: "",
 };
 
-function AirportChip({ code, selected, onClick }) {
+function AirportRow({ code, selected, onClick }) {
+  const ap = AIRPORT_MAP[code];
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-all ${
         selected
-          ? "bg-brand-500 text-white border-brand-500"
-          : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-brand-300 dark:hover:border-brand-600"
+          ? "bg-brand-50 dark:bg-brand-500/10 border-brand-300 dark:border-brand-500/40"
+          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:border-brand-200 dark:hover:border-brand-600/40"
       }`}
     >
-      {code}
+      <span className={`text-sm font-bold tabular-nums w-10 flex-shrink-0 ${
+        selected ? "text-brand-600 dark:text-brand-400" : "text-zinc-900 dark:text-white"
+      }`}>
+        {code}
+      </span>
+      <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+        {ap ? `${ap.city}, ${ap.country}` : "—"}
+      </span>
+      {selected && (
+        <span className="ml-auto text-brand-500 text-xs font-bold flex-shrink-0">✓</span>
+      )}
     </button>
   );
 }
@@ -113,7 +127,7 @@ export default function AddRouteModal({ onClose }) {
 
           {/* Step indicators */}
           <div className="flex items-center gap-1.5">
-            {STEPS.map((label, i) => (
+            {STEPS.map((_label, i) => (
               <div key={i} className="flex items-center gap-1.5 flex-1">
                 <div className={`h-1 flex-1 rounded-full transition-all ${
                   i <= step
@@ -137,9 +151,9 @@ export default function AddRouteModal({ onClose }) {
               <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-3">
                 Select departure airport(s)
               </p>
-              <div className="flex flex-wrap gap-2">
-                {AIRPORTS.map((a) => (
-                  <AirportChip
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {AIRPORT_CODES.map((a) => (
+                  <AirportRow
                     key={a}
                     code={a}
                     selected={form.origins.includes(a)}
@@ -161,9 +175,9 @@ export default function AddRouteModal({ onClose }) {
               <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-3">
                 Select destination airport(s)
               </p>
-              <div className="flex flex-wrap gap-2">
-                {AIRPORTS.map((a) => (
-                  <AirportChip
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {AIRPORT_CODES.map((a) => (
+                  <AirportRow
                     key={a}
                     code={a}
                     selected={form.destinations.includes(a)}

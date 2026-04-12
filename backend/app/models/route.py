@@ -24,7 +24,7 @@ class Route(Base):
     cabin_classes: Mapped[list[str]] = mapped_column(ARRAY(String(20)), nullable=False)
     date_from: Mapped[date] = mapped_column(Date, nullable=False)
     date_to: Mapped[date] = mapped_column(Date, nullable=False)
-    # ONE_WAY | ROUND_TRIP
+    # ONE_WAY | ROUND_TRIP | MONITOR
     trip_type: Mapped[str] = mapped_column(String(10), default="ONE_WAY", nullable=False)
     # For round-trips: how many days after departure to return (e.g. 7 = one week)
     return_date_offset_days: Mapped[int | None] = mapped_column(nullable=True)
