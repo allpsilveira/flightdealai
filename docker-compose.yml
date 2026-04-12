@@ -11,7 +11,18 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-changeme-in-prod}
-    PYTHONPATH: /opt/airflow/dags:/opt/airflow/plugins
+    PYTHONPATH: /opt/airflow:/opt/airflow/plugins
+    # App env vars — needed by DAG tasks that call backend services
+    DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD}@postgres/flightdeal
+    SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+    DUFFEL_API_KEY: ${DUFFEL_API_KEY}
+    SEATS_AERO_API_KEY: ${SEATS_AERO_API_KEY}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+    TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+    TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM:-whatsapp:+14155238886}
+    VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+    VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./backend/app:/opt/airflow/plugins/app
@@ -36,10 +47,11 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres && psql -U postgres -c 'SELECT 1 FROM pg_extension WHERE extname=$$timescaledb$$' | grep -q 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 20s
     networks:
       - flightdeal
 
@@ -112,19 +124,18 @@ services:
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 30
-      AMADEUS_CLIENT_ID: ${AMADEUS_CLIENT_ID}
-      AMADEUS_CLIENT_SECRET: ${AMADEUS_CLIENT_SECRET}
-      SEARCHAPI_API_KEY: ${SEARCHAPI_API_KEY}
-      KIWI_API_KEY: ${KIWI_API_KEY}
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
       DUFFEL_API_KEY: ${DUFFEL_API_KEY}
       SEATS_AERO_API_KEY: ${SEATS_AERO_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
-      TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM}
+      TWILIO_WHATSAPP_FROM: ${TWILIO_WHATSAPP_FROM:-whatsapp:+14155238886}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
       REDIS_URL: redis://redis:6379/0
-    volumes:
-      - ./backend:/app
     ports:
       - "8000:8000"
     depends_on:

@@ -134,8 +134,8 @@ TOTAL: ~$37-40/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2-5)
 3. **Program Accessibility (0-15):** Transferable from 3+ card programs=15, 2=12, 1=8
 
 ### Cold Start (first 30 days):
-- Days 0-3: Use SearchApi typical_price_range only, no scoring, data collection mode
-- Days 4-14: Blend SearchApi trends + emerging own data, conservative scoring
+- Days 0-3: Use SerpApi typical_price_range only, no scoring, data collection mode
+- Days 4-14: Blend SerpApi trends + emerging own data, conservative scoring
 - Days 15-30: 50/50 blend
 - Days 30+: Self-sufficient from own TimescaleDB percentiles
 
@@ -154,47 +154,41 @@ TOTAL: ~$37-40/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2-5)
 
 ### Main DAG (per route, per cabin class — dynamically generated):
 ```
-PARALLEL (all fire at once):
-  fetch_amadeus ──────┐
-  fetch_searchapi ────┤
-  fetch_kiwi ─────────┼──→ cross_reference ──→ score_deal
-                      │         │
-                      │    ┌────┴────┐
-                      │    │ Branch  │
-                      │    └──┬───┬──┘
-                      │  ≥50  │   │ <50
-                      │       │   │
-                      │  ai_analysis  log_skip
-                      │       │
-                      │  ┌────┴────┐
-                      │  │ Branch  │
-                      │  └──┬───┬──┘
-                      │ ≥80  │   │ 50-79
-                      │ /GEM │   │
-                      │      │   │
-                 enrich_duffel  update_dashboard
-                 enrich_awards
-                      │
-                 dispatch_alerts
-                      │
-                 update_priority
+fetch_serpapi ──→ cross_reference ──→ score_deal ──→ branch_score
+                                                          │
+                                              ┌───────────┴──────────┐
+                                            ≥50                      <50
+                                              │                       │
+                                         ai_analysis             log_skip
+                                              │
+                                        branch_action
+                                              │
+                              ┌───────────────┴──────────────┐
+                          BUY/GEM                         WATCH/NORMAL
+                              │                               │
+                        enrich_duffel                  update_dashboard
+                              │
+                        enrich_awards (Seats.aero)
+                              │
+                        dispatch_alerts (WhatsApp + Web Push)
+                              │
+                        update_priority          ◄── (all paths converge)
 ```
 
 **Key Airflow features used:**
-- Parallel task execution (5 API calls simultaneously)
-- BranchPythonOperator (conditional paths based on score)
-- XCom (pass data between tasks)
-- trigger_rule="none_failed" (graceful degradation if one API fails)
+- BranchPythonOperator (score ≥50 → AI; action BUY/GEM → enrich)
+- XCom (pass data between tasks — google_result, xref_summary, score_total, deal_id)
+- trigger_rule=NONE_FAILED_MIN_ONE_SUCCESS (graceful degradation)
 - retries=3 with exponential backoff per task
-- SLA monitoring (10 min per cycle)
-- Dynamic DAG generation (one DAG per active route from DB)
-- Dataset-aware scheduling for secondary DAGs
+- SLA monitoring (5 min per cycle)
+- Dynamic DAG generation from DB — one DAG per active (route × cabin_class)
+- HOT=every 2h, WARM=every 4h, COLD=every 8h schedules
 
 ### Secondary DAGs:
-- **weekly_briefing:** Monday 7 AM, Claude AI market summary via WhatsApp
-- **stats_refresh:** Triggered by new price data, recalculates percentiles
-- **cabin_quality_refresh:** Monthly, Claude reviews cabin DB for updates
-- **cheapest_date_scan:** Daily, Amadeus cheapest date endpoint per route
+- **weekly_briefing:** Monday 7 AM — Claude AI market summary via WhatsApp
+- **stats_refresh:** Every 6h — manually refreshes TimescaleDB continuous aggregates
+- **cabin_quality_refresh:** Monthly — Claude reviews cabin DB for updates
+- **cheapest_date_scan:** Daily 6 AM — SerpApi samples next 60 days to find cheapest departure dates
 
 ---
 
@@ -204,7 +198,7 @@ PARALLEL (all fire at once):
 
 **Regular tables:** users, routes (with origins[], destinations[], cabin_classes[]), alert_rules, cabin_quality, transfer_partners, program_baselines
 
-**Hypertables (time-series):** amadeus_prices, google_prices, kiwi_prices, duffel_prices, award_prices, deal_analysis
+**Hypertables (time-series):** google_prices (SerpApi), duffel_prices, award_prices (Seats.aero), deal_analysis
 
 **Continuous aggregates:** price_hourly (per source), price_daily_stats (with percentiles p5/p10/p20/p25/p30/median/p75/p90, stddev, min)
 
@@ -287,17 +281,19 @@ flightdeal-ai/
 │   │   │   ├── alerts.py
 │   │   │   └── ws.py
 │   │   ├── services/
-│   │   │   ├── amadeus_client.py
-│   │   │   ├── searchapi_client.py
-│   │   │   ├── kiwi_client.py
+│   │   │   ├── serpapi_client.py
 │   │   │   ├── duffel_client.py
 │   │   │   ├── seats_aero_client.py
 │   │   │   ├── cross_reference.py
 │   │   │   ├── scoring.py
 │   │   │   ├── stats.py
+│   │   │   ├── ingestion.py
+│   │   │   ├── scanner.py
+│   │   │   ├── deal_pipeline.py
 │   │   │   ├── award_analyzer.py
 │   │   │   ├── claude_advisor.py
-│   │   │   └── whatsapp.py
+│   │   │   ├── whatsapp.py
+│   │   │   └── web_push.py
 │   │   └── data/
 │   │       ├── cabin_quality.json
 │   │       ├── transfer_partners.json
@@ -306,9 +302,7 @@ flightdeal-ai/
 ├── dags/
 │   ├── scan_route_dag_factory.py
 │   ├── tasks/
-│   │   ├── fetch_amadeus.py
-│   │   ├── fetch_searchapi.py
-│   │   ├── fetch_kiwi.py
+│   │   ├── fetch_serpapi.py
 │   │   ├── fetch_duffel.py
 │   │   ├── fetch_awards.py
 │   │   ├── cross_reference.py
@@ -437,22 +431,28 @@ POSTGRES_DB=flightdeal
 
 # Airflow
 AIRFLOW_ADMIN_PASSWORD=
-AIRFLOW_FERNET_KEY=
+AIRFLOW_FERNET_KEY=        # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+AIRFLOW_SECRET_KEY=        # openssl rand -hex 32
 
-# APIs
-SERPAPI_API_KEY=
-DUFFEL_API_KEY=
-SEATS_AERO_API_KEY=
-ANTHROPIC_API_KEY=
+# Data sources (sign up required — see .env.example for details)
+SERPAPI_API_KEY=           # serpapi.com — $25/mo
+DUFFEL_API_KEY=            # duffel.com — free test key available
+SEATS_AERO_API_KEY=        # seats.aero — $10/mo
+ANTHROPIC_API_KEY=         # console.anthropic.com — pay-per-use
 
-# Twilio
+# Twilio WhatsApp
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
-TWILIO_WHATSAPP_FROM=
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+
+# Web Push (VAPID)
+VAPID_PUBLIC_KEY=          # generate with py-vapid
+VAPID_PRIVATE_KEY=
+VAPID_CLAIM_EMAIL=
 
 # App
-JWT_SECRET=
-APP_DOMAIN=
+JWT_SECRET=                # openssl rand -hex 64
+APP_DOMAIN=                # e.g. flightdeal.yourdomain.com
 ```
 
 ---
