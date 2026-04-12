@@ -83,7 +83,7 @@ const ScoreRow = ({ label, value, max, description }) => {
   );
 };
 
-export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) {
+export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], dealsByOrigin = {} }) {
   const [offers,        setOffers]        = useState(null);
   const [enrichment,    setEnrichment]    = useState(null);
   const [loadingOffers, setLoadingOffers] = useState(true);
@@ -560,7 +560,11 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                 <AirportComparisonMap
                   originCodes={routeOrigins.length > 0 ? routeOrigins : [deal.origin]}
                   destCodes={[deal.destination]}
-                  dealsByOrigin={{ [deal.origin]: { price_usd: deal.best_price_usd, departure_date: deal.departure_date } }}
+                  dealsByOrigin={
+                    Object.keys(dealsByOrigin).length > 0
+                      ? dealsByOrigin
+                      : { [deal.origin]: { price_usd: deal.best_price_usd, departure_date: deal.departure_date } }
+                  }
                 />
                 {routeOrigins.length > 1 && (
                   <div className="mt-2 rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden

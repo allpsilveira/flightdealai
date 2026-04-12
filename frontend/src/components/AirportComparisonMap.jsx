@@ -1,6 +1,6 @@
 /**
- * AirportComparisonMap — MapLibre GL map showing origin airports with prices
- * and nearby airports (from airports.json) within driving distance.
+ * AirportComparisonMap — MapLibre GL map showing origin airports with prices,
+ * destination airports, and nearby airports within driving distance of both.
  *
  * Props:
  *   originCodes   — IATA[] — the route's tracked origin airports
@@ -13,6 +13,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import allAirports from "../data/airports.json";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// Within ~3-4h drive (≈ 300 km straight-line)
+const DRIVE_RADIUS_KM = 300;
 
 // Haversine distance in km
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -28,7 +30,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 
 function driveLabel(km) {
   if (km < 5) return "same area";
-  const hours = km * 1.3 / 80; // 1.3× road factor, 80 km/h avg
+  const hours = (km * 1.3) / 80; // 1.3× road factor, 80 km/h avg
   if (hours < 1) return `~${Math.round(hours * 60)}min drive`;
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
@@ -36,37 +38,47 @@ function driveLabel(km) {
 }
 
 export default function AirportComparisonMap({ originCodes, destCodes, dealsByOrigin }) {
-  const mapRef = useRef(null);
+  const mapRef      = useRef(null);
   const mapInstance = useRef(null);
-  const markersRef = useRef([]);
+  const markersRef  = useRef([]);
 
-  const airportMap = Object.fromEntries(allAirports.map((a) => [a.iata, a]));
-  const allCodes = [...new Set([...(originCodes ?? []), ...(destCodes ?? [])])];
-  const trackedOrigins = new Set(originCodes ?? []);
-  const trackedDests = new Set(destCodes ?? []);
+  const airportMap      = Object.fromEntries(allAirports.map((a) => [a.iata, a]));
+  const allTrackedCodes = [...new Set([...(originCodes ?? []), ...(destCodes ?? [])])];
+  const trackedOrigins  = new Set(originCodes ?? []);
+  const trackedDests    = new Set(destCodes ?? []);
 
-  // Find nearby airports within 600 km of any tracked origin
-  const nearbyUntracked = allAirports.filter((ap) => {
-    if (allCodes.includes(ap.iata)) return false;
+  // Nearby airports within DRIVE_RADIUS_KM of any tracked ORIGIN (alternative departure)
+  const nearbyOrigins = allAirports.filter((ap) => {
+    if (allTrackedCodes.includes(ap.iata)) return false;
     return (originCodes ?? []).some((code) => {
       const origin = airportMap[code];
       if (!origin) return false;
-      return haversineKm(origin.lat, origin.lon, ap.lat, ap.lon) <= 600;
+      return haversineKm(origin.lat, origin.lon, ap.lat, ap.lon) <= DRIVE_RADIUS_KM;
+    });
+  });
+
+  // Nearby airports within DRIVE_RADIUS_KM of any tracked DESTINATION (alternative arrival)
+  const nearbyDests = allAirports.filter((ap) => {
+    if (allTrackedCodes.includes(ap.iata)) return false;
+    if (nearbyOrigins.some((n) => n.iata === ap.iata)) return false; // avoid duplicates
+    return (destCodes ?? []).some((code) => {
+      const dest = airportMap[code];
+      if (!dest) return false;
+      return haversineKm(dest.lat, dest.lon, ap.lat, ap.lon) <= DRIVE_RADIUS_KM;
     });
   });
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
 
-    // Find all airports to show
     const toShow = [
-      ...allCodes.map((c) => airportMap[c]).filter(Boolean),
-      ...nearbyUntracked,
+      ...allTrackedCodes.map((c) => airportMap[c]).filter(Boolean),
+      ...nearbyOrigins,
+      ...nearbyDests,
     ];
 
     if (toShow.length === 0) return;
 
-    // Compute center
     const avgLat = toShow.reduce((s, a) => s + a.lat, 0) / toShow.length;
     const avgLon = toShow.reduce((s, a) => s + a.lon, 0) / toShow.length;
 
@@ -82,67 +94,78 @@ export default function AirportComparisonMap({ originCodes, destCodes, dealsByOr
     mapInstance.current = map;
 
     map.on("load", () => {
-      // Fit to all shown airports
       if (toShow.length > 1) {
         const bounds = new maplibregl.LngLatBounds();
         toShow.forEach((ap) => bounds.extend([ap.lon, ap.lat]));
-        map.fitBounds(bounds, { padding: 48, maxZoom: 9, duration: 0 });
+        map.fitBounds(bounds, { padding: 52, maxZoom: 9, duration: 0 });
       }
 
-      // Add markers
+      // Pick the primary reference origin for drive-time calculations
       const primaryOrigin = originCodes?.[0] ? airportMap[originCodes[0]] : null;
+      const primaryDest   = destCodes?.[0]   ? airportMap[destCodes[0]]   : null;
 
-      toShow.forEach((ap) => {
-        const isOrigin = trackedOrigins.has(ap.iata);
-        const isDest = trackedDests.has(ap.iata);
-        const isNearby = !isOrigin && !isDest;
-        const deal = dealsByOrigin?.[ap.iata];
+      const addMarker = (ap, role) => {
+        const isOrigin      = role === "origin";
+        const isDest        = role === "dest";
+        const isNearOrigin  = role === "near-origin";
+        const isNearDest    = role === "near-dest";
+        const deal          = dealsByOrigin?.[ap.iata];
 
-        const distKm = primaryOrigin && !isOrigin
-          ? haversineKm(primaryOrigin.lat, primaryOrigin.lon, ap.lat, ap.lon)
+        // Drive time — from primary origin for alt-origins, from primary dest for alt-dests
+        const ref = isNearOrigin ? primaryOrigin : isNearDest ? primaryDest : null;
+        const distKm = ref
+          ? haversineKm(ref.lat, ref.lon, ap.lat, ap.lon)
           : 0;
 
-        // Build popup content
+        // Popup
         const priceHtml = deal
-          ? `<p class="font-bold text-emerald-600">$${Math.round(deal.price_usd).toLocaleString()}</p>`
-          : isNearby
-          ? `<p class="text-zinc-400 text-xs">Not scanning yet</p>`
-          : `<p class="text-zinc-400 text-xs">No data yet</p>`;
+          ? `<p style="font-weight:700;font-size:15px;color:#059669;margin:2px 0">\$${Math.round(deal.price_usd).toLocaleString()}</p>`
+          : (isNearOrigin || isNearDest)
+          ? `<p style="font-size:11px;color:#9ca3af;margin:2px 0">Not tracking — add to route</p>`
+          : `<p style="font-size:11px;color:#9ca3af;margin:2px 0">No scan data yet</p>`;
 
-        const driveHtml = distKm > 5
-          ? `<p class="text-zinc-400 text-xs">${driveLabel(distKm)} from ${primaryOrigin?.iata ?? ""}</p>`
+        const roleHtml = isDest
+          ? `<p style="font-size:10px;color:#6366f1;font-weight:600;margin:2px 0">Destination</p>`
+          : isNearOrigin
+          ? `<p style="font-size:10px;color:#6b7280;margin:2px 0">Alt. departure · ${driveLabel(distKm)}</p>`
+          : isNearDest
+          ? `<p style="font-size:10px;color:#6b7280;margin:2px 0">Alt. arrival · ${driveLabel(distKm)} from ${primaryDest?.iata ?? ""}</p>`
           : "";
 
-        const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
+        const popup = new maplibregl.Popup({ offset: 26, closeButton: false })
           .setHTML(`
-            <div style="font-family: system-ui, sans-serif; min-width: 120px">
-              <p style="font-weight: 700; font-size: 14px; margin: 0 0 2px">${ap.iata}</p>
-              <p style="font-size: 11px; color: #6b7280; margin: 0 0 4px">${ap.city} · ${ap.name}</p>
+            <div style="font-family:system-ui,sans-serif;min-width:130px;padding:2px 0">
+              <p style="font-weight:700;font-size:14px;margin:0 0 1px">${ap.iata}</p>
+              <p style="font-size:11px;color:#6b7280;margin:0 0 4px">${ap.city} · ${ap.name}</p>
               ${priceHtml}
-              ${driveHtml}
-              ${isNearby ? '<p style="font-size: 10px; color: #9ca3af; margin-top: 4px">Add to route to compare prices</p>' : ""}
+              ${roleHtml}
+              ${(isNearOrigin || isNearDest) ? '<p style="font-size:10px;color:#9ca3af;margin-top:4px">Add to route to compare prices</p>' : ""}
             </div>
           `);
 
-        // Custom marker element
+        // Marker element
+        const size    = (isNearOrigin || isNearDest) ? "10px" : "14px";
+        const color   =
+          isDest        ? "#4f46e5" :   // indigo for destination
+          isOrigin && deal ? "#f26419" :  // brand orange = tracked + price
+          isOrigin      ? "#3b82f6" :    // blue = tracked, no price yet
+          isNearOrigin  ? "#9ca3af" :    // grey = alt departure
+          "#a78bfa";                     // purple-ish = alt arrival
+
         const el = document.createElement("div");
         el.style.cssText = `
-          width: ${isNearby ? "10px" : "14px"};
-          height: ${isNearby ? "10px" : "14px"};
+          width: ${size};
+          height: ${size};
           border-radius: 50%;
-          background: ${
-            isDest ? "#1e293b" :
-            isOrigin && deal ? "#f26419" :
-            isOrigin ? "#3b82f6" :
-            "#9ca3af"
-          };
-          border: 2px solid ${isNearby ? "#d1d5db" : "white"};
+          background: ${color};
+          border: 2px solid ${(isNearOrigin || isNearDest) ? "#e5e7eb" : "white"};
           cursor: pointer;
-          opacity: ${isNearby ? "0.6" : "1"};
-          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+          opacity: ${(isNearOrigin || isNearDest) ? "0.65" : "1"};
+          box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+          position: relative;
         `;
 
-        // Price label for tracked origins with deals
+        // Price label for tracked airports that have deal data
         if ((isOrigin || isDest) && deal) {
           const label = document.createElement("div");
           label.style.cssText = `
@@ -150,7 +173,7 @@ export default function AirportComparisonMap({ originCodes, destCodes, dealsByOr
             bottom: 18px;
             left: 50%;
             transform: translateX(-50%);
-            background: #f26419;
+            background: ${isDest ? "#4f46e5" : "#f26419"};
             color: white;
             font-size: 10px;
             font-weight: 700;
@@ -159,9 +182,28 @@ export default function AirportComparisonMap({ originCodes, destCodes, dealsByOr
             white-space: nowrap;
             pointer-events: none;
           `;
-          label.textContent = `$${Math.round(deal.price_usd).toLocaleString()}`;
-          el.style.position = "relative";
+          label.textContent = `\$${Math.round(deal.price_usd).toLocaleString()}`;
           el.appendChild(label);
+        }
+
+        // Drive-time label on nearby airports
+        if ((isNearOrigin || isNearDest) && distKm > 5) {
+          const driveTag = document.createElement("div");
+          driveTag.style.cssText = `
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.55);
+            color: white;
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            white-space: nowrap;
+            pointer-events: none;
+          `;
+          driveTag.textContent = driveLabel(distKm);
+          el.appendChild(driveTag);
         }
 
         const marker = new maplibregl.Marker({ element: el })
@@ -170,7 +212,17 @@ export default function AirportComparisonMap({ originCodes, destCodes, dealsByOr
           .addTo(map);
 
         markersRef.current.push(marker);
+      };
+
+      // Render all airports
+      allTrackedCodes.forEach((code) => {
+        const ap = airportMap[code];
+        if (!ap) return;
+        if (trackedOrigins.has(code)) addMarker(ap, "origin");
+        else if (trackedDests.has(code)) addMarker(ap, "dest");
       });
+      nearbyOrigins.forEach((ap) => addMarker(ap, "near-origin"));
+      nearbyDests.forEach((ap) => addMarker(ap, "near-dest"));
     });
 
     return () => {
@@ -181,10 +233,28 @@ export default function AirportComparisonMap({ originCodes, destCodes, dealsByOr
     };
   }, []);
 
+  // Legend
   return (
-    <div
-      ref={mapRef}
-      className="w-full h-52 rounded-xl overflow-hidden border border-zinc-100 dark:border-zinc-700"
-    />
+    <div className="space-y-1.5">
+      <div
+        ref={mapRef}
+        className="w-full h-52 rounded-xl overflow-hidden border border-zinc-100 dark:border-zinc-700"
+      />
+      <div className="flex items-center gap-4 flex-wrap px-1">
+        <LegendDot color="#f26419" label="Tracked origin" />
+        <LegendDot color="#4f46e5" label="Destination" />
+        <LegendDot color="#9ca3af" label="Alt. departure (drive)" />
+        <LegendDot color="#a78bfa" label="Alt. arrival (drive)" />
+      </div>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+      <span className="text-xs text-zinc-400 dark:text-zinc-500">{label}</span>
+    </div>
   );
 }

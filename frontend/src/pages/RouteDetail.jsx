@@ -127,6 +127,18 @@ export default function RouteDetail() {
   // Map of deal.id → deal for AirlineLeaderboard per-row resolution
   const dealMap = useMemo(() => new Map(deals.map((d) => [d.id, d])), [deals]);
 
+  // Best price per origin airport — passed to the map component so it can show prices on pins
+  const dealsByOrigin = useMemo(() => {
+    const map = {};
+    for (const d of filteredDeals) {
+      if (!d.origin) continue;
+      if (!map[d.origin] || d.best_price_usd < map[d.origin].price_usd) {
+        map[d.origin] = { price_usd: d.best_price_usd, departure_date: d.departure_date };
+      }
+    }
+    return map;
+  }, [filteredDeals]);
+
   return (
     <div className="min-h-0">
       {/* ── Route header ──────────────────────────────────────────────── */}
@@ -401,6 +413,7 @@ export default function RouteDetail() {
           deal={selectedDeal}
           onClose={() => setSelectedDeal(null)}
           routeOrigins={route?.origins ?? []}
+          dealsByOrigin={dealsByOrigin}
         />
       )}
     </div>
