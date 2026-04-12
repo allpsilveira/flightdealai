@@ -11,8 +11,24 @@ logger = structlog.get_logger()
 settings = get_settings()
 
 
+def _run_migrations():
+    """Run Alembic migrations on startup so schema is always in sync with models."""
+    try:
+        from alembic.config import Config
+        from alembic import command
+        import os
+        # Alembic.ini is at the repo root, one level above /app
+        alembic_ini = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
+        alembic_cfg = Config(os.path.abspath(alembic_ini))
+        command.upgrade(alembic_cfg, "head")
+        logger.info("alembic_migrations_ok")
+    except Exception as exc:
+        logger.error("alembic_migrations_failed", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _run_migrations()
     logger.info("FlyLuxuryDeals backend starting up")
     yield
     logger.info("FlyLuxuryDeals backend shutting down")
