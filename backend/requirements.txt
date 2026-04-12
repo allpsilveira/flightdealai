@@ -37,4 +37,3 @@ python-dotenv==1.0.1
 structlog==24.1.0
 numpy==1.26.4
 orjson==3.10.3
-# apscheduler installed separately — see daily_scheduler.py
