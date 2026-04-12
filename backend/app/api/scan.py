@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models.route import Route
 from app.models.scan_history import ScanHistory
 from app.models.user import User
-from app.services.scanner import scan_route
+from app.services.scanner import scan_route, expand_origins_by_drive
 from app.services.deal_pipeline import run_pipeline_batch
 
 router = APIRouter()
@@ -180,9 +180,12 @@ async def scan_saved_route(
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
 
+    # Expand origins with nearby airports the user is willing to drive to
+    effective_origins = expand_origins_by_drive(route.origins, route.max_drive_hours)
+
     return await _run_and_log(
         route_id=route.id,
-        origins=route.origins,
+        origins=effective_origins,
         destinations=route.destinations,
         cabin_classes=route.cabin_classes,
         date_from=route.date_from,

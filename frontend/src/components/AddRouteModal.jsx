@@ -21,7 +21,15 @@ const TRIP_TYPES = [
   { value: "MONITOR",    label: "Monitor both ★", desc: "Outbound + return tracked separately (recommended)" },
 ];
 
-const STEPS = ["Origins", "Destinations", "Trip Type", "Cabin", "Dates"];
+const DRIVE_OPTIONS = [
+  { value: 0,   label: "No driving",          desc: "Fly only from selected airports", radius: null },
+  { value: 1,   label: "Up to 1 hour",         desc: "~80 km radius — nearby cities",   radius: "~80 km" },
+  { value: 2,   label: "Up to 2 hours ★",      desc: "~150 km radius — recommended",    radius: "~150 km" },
+  { value: 3,   label: "Up to 3 hours",         desc: "~230 km radius — wider region",   radius: "~230 km" },
+  { value: 4,   label: "Up to 4 hours",         desc: "~300 km radius — large metro area", radius: "~300 km" },
+];
+
+const STEPS = ["Origins", "Destinations", "Trip Type", "Cabin", "Drive Range", "Dates"];
 
 const EMPTY = {
   name: "",
@@ -29,6 +37,7 @@ const EMPTY = {
   destinations: [],
   trip_type: "MONITOR",
   cabin_classes: [],
+  max_drive_hours: 2,
   date_from: "",
   date_to: "",
 };
@@ -80,7 +89,8 @@ export default function AddRouteModal({ onClose }) {
     if (step === 1) return form.destinations.length > 0;
     if (step === 2) return !!form.trip_type;
     if (step === 3) return form.cabin_classes.length > 0;
-    if (step === 4) return form.date_from && form.date_to;
+    if (step === 4) return form.max_drive_hours != null;
+    if (step === 5) return form.date_from && form.date_to;
     return true;
   };
 
@@ -89,7 +99,11 @@ export default function AddRouteModal({ onClose }) {
     const name = form.name.trim() ||
       `${form.origins.join("/")} → ${form.destinations.join("/")}`;
     try {
-      await createRoute({ ...form, name });
+      await createRoute({
+        ...form,
+        name,
+        max_drive_hours: form.max_drive_hours > 0 ? form.max_drive_hours : null,
+      });
       onClose();
     } catch (err) {
       setError(err.response?.data?.detail ?? "Failed to create route.");
@@ -126,13 +140,11 @@ export default function AddRouteModal({ onClose }) {
           </div>
 
           {/* Step indicators */}
-          <div className="flex items-center gap-1.5">
-            {STEPS.map((_label, i) => (
-              <div key={i} className="flex items-center gap-1.5 flex-1">
-                <div className={`h-1 flex-1 rounded-full transition-all ${
-                  i <= step
-                    ? "bg-brand-500"
-                    : "bg-zinc-200 dark:bg-zinc-700"
+          <div className="flex items-center gap-1">
+            {STEPS.map((_l, i) => (
+              <div key={i} className="flex-1">
+                <div className={`h-1 rounded-full transition-all ${
+                  i <= step ? "bg-brand-500" : "bg-zinc-200 dark:bg-zinc-700"
                 }`} />
               </div>
             ))}
@@ -143,22 +155,19 @@ export default function AddRouteModal({ onClose }) {
         </div>
 
         {/* Step content */}
-        <div className="px-6 pb-6 min-h-[200px]">
+        <div className="px-6 pb-6 min-h-[220px]">
 
           {/* Step 0: Origins */}
           {step === 0 && (
             <div>
               <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-3">
-                Select departure airport(s)
+                Select your primary departure airport(s)
               </p>
               <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                 {AIRPORT_CODES.map((a) => (
-                  <AirportRow
-                    key={a}
-                    code={a}
+                  <AirportRow key={a} code={a}
                     selected={form.origins.includes(a)}
-                    onClick={() => toggle("origins", a)}
-                  />
+                    onClick={() => toggle("origins", a)} />
                 ))}
               </div>
               {form.origins.length > 0 && (
@@ -177,12 +186,9 @@ export default function AddRouteModal({ onClose }) {
               </p>
               <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                 {AIRPORT_CODES.map((a) => (
-                  <AirportRow
-                    key={a}
-                    code={a}
+                  <AirportRow key={a} code={a}
                     selected={form.destinations.includes(a)}
-                    onClick={() => toggle("destinations", a)}
-                  />
+                    onClick={() => toggle("destinations", a)} />
                 ))}
               </div>
               {form.destinations.length > 0 && (
@@ -197,23 +203,17 @@ export default function AddRouteModal({ onClose }) {
           {step === 2 && (
             <div className="space-y-2.5">
               {TRIP_TYPES.map(({ value, label, desc }) => (
-                <button
-                  key={value}
-                  type="button"
+                <button key={value} type="button"
                   onClick={() => setForm((f) => ({ ...f, trip_type: value }))}
                   className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
                     form.trip_type === value
                       ? "bg-brand-50 dark:bg-brand-500/10 border-brand-300 dark:border-brand-500/40"
-                      : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-brand-200 dark:hover:border-brand-600/40"
+                      : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-brand-200"
                   }`}
                 >
                   <p className={`text-sm font-medium ${
-                    form.trip_type === value
-                      ? "text-brand-700 dark:text-brand-300"
-                      : "text-zinc-900 dark:text-white"
-                  }`}>
-                    {label}
-                  </p>
+                    form.trip_type === value ? "text-brand-700 dark:text-brand-300" : "text-zinc-900 dark:text-white"
+                  }`}>{label}</p>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{desc}</p>
                 </button>
               ))}
@@ -224,79 +224,91 @@ export default function AddRouteModal({ onClose }) {
           {step === 3 && (
             <div className="space-y-2.5">
               {CABINS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
+                <button key={value} type="button"
                   onClick={() => toggle("cabin_classes", value)}
                   className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
                     form.cabin_classes.includes(value)
                       ? "bg-brand-50 dark:bg-brand-500/10 border-brand-300 dark:border-brand-500/40"
-                      : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-brand-200 dark:hover:border-brand-600/40"
+                      : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-brand-200"
                   }`}
                 >
                   <p className={`text-sm font-medium ${
-                    form.cabin_classes.includes(value)
-                      ? "text-brand-700 dark:text-brand-300"
-                      : "text-zinc-900 dark:text-white"
-                  }`}>
-                    {label}
-                  </p>
+                    form.cabin_classes.includes(value) ? "text-brand-700 dark:text-brand-300" : "text-zinc-900 dark:text-white"
+                  }`}>{label}</p>
                 </button>
               ))}
             </div>
           )}
 
-          {/* Step 4: Dates */}
+          {/* Step 4: Drive range */}
           {step === 4 && (
+            <div>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-1">
+                How far are you willing to drive to pay less?
+              </p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-3 leading-snug">
+                We'll automatically check nearby airports within your drive range and alert you when they're cheaper to the same destination.
+              </p>
+              <div className="space-y-2">
+                {DRIVE_OPTIONS.map(({ value, label, desc, radius }) => (
+                  <button key={value} type="button"
+                    onClick={() => setForm((f) => ({ ...f, max_drive_hours: value }))}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                      form.max_drive_hours === value
+                        ? "bg-brand-50 dark:bg-brand-500/10 border-brand-300 dark:border-brand-500/40"
+                        : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-brand-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className={`text-sm font-medium ${
+                        form.max_drive_hours === value ? "text-brand-700 dark:text-brand-300" : "text-zinc-900 dark:text-white"
+                      }`}>{label}</p>
+                      {radius && (
+                        <span className="text-xs text-zinc-400 tabular-nums">{radius}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Dates */}
+          {step === 5 && (
             <div className="space-y-4">
               <div>
                 <label className="label block mb-1.5">Date From</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.date_from}
-                  onChange={(e) => setForm((f) => ({ ...f, date_from: e.target.value }))}
-                />
+                <input type="date" className="input" value={form.date_from}
+                  onChange={(e) => setForm((f) => ({ ...f, date_from: e.target.value }))} />
               </div>
               <div>
                 <label className="label block mb-1.5">Date To</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.date_to}
-                  onChange={(e) => setForm((f) => ({ ...f, date_to: e.target.value }))}
-                />
+                <input type="date" className="input" value={form.date_to}
+                  onChange={(e) => setForm((f) => ({ ...f, date_to: e.target.value }))} />
               </div>
               <div>
                 <label className="label block mb-1.5">Route Name (optional)</label>
-                <input
-                  type="text"
-                  className="input"
+                <input type="text" className="input"
                   placeholder={`${form.origins.join("/")} → ${form.destinations.join("/")}`}
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                />
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
 
               {/* Summary */}
               <div className="px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 space-y-1">
                 <p className="text-xs font-semibold text-zinc-900 dark:text-white mb-2">Summary</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">From:</span>{" "}
-                  {form.origins.join(", ")}
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">To:</span>{" "}
-                  {form.destinations.join(", ")}
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Cabin:</span>{" "}
-                  {form.cabin_classes.map(c => CABINS.find(x => x.value === c)?.label).join(", ")}
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Type:</span>{" "}
-                  {TRIP_TYPES.find(t => t.value === form.trip_type)?.label}
-                </p>
+                {[
+                  ["From",   form.origins.join(", ")],
+                  ["To",     form.destinations.join(", ")],
+                  ["Cabin",  form.cabin_classes.map(c => CABINS.find(x => x.value === c)?.label).join(", ")],
+                  ["Type",   TRIP_TYPES.find(t => t.value === form.trip_type)?.label],
+                  ["Drive",  DRIVE_OPTIONS.find(d => d.value === form.max_drive_hours)?.label],
+                ].map(([label, val]) => val ? (
+                  <p key={label} className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="font-medium text-zinc-700 dark:text-zinc-300">{label}:</span>{" "}{val}
+                  </p>
+                ) : null)}
               </div>
             </div>
           )}
@@ -311,29 +323,19 @@ export default function AddRouteModal({ onClose }) {
 
         {/* Footer nav */}
         <div className="px-6 pb-6 flex items-center justify-between gap-3">
-          <button
-            type="button"
+          <button type="button"
             onClick={() => step === 0 ? onClose() : setStep((s) => s - 1)}
-            className="btn-ghost"
-          >
+            className="btn-ghost">
             {step === 0 ? "Cancel" : "← Back"}
           </button>
           {step < STEPS.length - 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!canAdvance()}
-              className="btn-primary disabled:opacity-40"
-            >
+            <button type="button" onClick={() => setStep((s) => s + 1)}
+              disabled={!canAdvance()} className="btn-primary disabled:opacity-40">
               Next →
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving || !canAdvance()}
-              className="btn-primary disabled:opacity-40"
-            >
+            <button type="button" onClick={handleSubmit}
+              disabled={saving || !canAdvance()} className="btn-primary disabled:opacity-40">
               {saving ? "Creating…" : "Start Monitoring"}
             </button>
           )}

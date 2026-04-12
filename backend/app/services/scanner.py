@@ -11,9 +11,12 @@ Per scan, SerpApi returns:
   - all offers by (airline, stops) → returned in all_offers for pipeline to store as FlightOffers
 """
 import asyncio
+import json
+import math
 import structlog
 import uuid
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +25,66 @@ from app.services import serpapi_client
 from app.services.ingestion import store_google_price
 
 logger = structlog.get_logger(__name__)
+
+# ── Nearby airport expansion ───────────────────────────────────────────────────
+
+_AIRPORTS: list[dict] | None = None
+
+def _load_airports() -> list[dict]:
+    global _AIRPORTS
+    if _AIRPORTS is None:
+        airports_path = Path(__file__).parent.parent / "data" / "airports.json"
+        with open(airports_path, encoding="utf-8") as f:
+            _AIRPORTS = json.load(f)
+    return _AIRPORTS
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371
+    d_lat = math.radians(lat2 - lat1)
+    d_lon = math.radians(lon2 - lon1)
+    a = (math.sin(d_lat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+         * math.sin(d_lon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def expand_origins_by_drive(origins: list[str], max_drive_hours: float | None) -> list[str]:
+    """
+    Return origins expanded with nearby airports reachable within max_drive_hours.
+    Drive time formula: km * 1.3 (road factor) / 80 km/h.
+    So max straight-line km = max_drive_hours * 80 / 1.3.
+    """
+    if not max_drive_hours or max_drive_hours <= 0:
+        return origins
+
+    airports = _load_airports()
+    airport_map = {a["iata"]: a for a in airports}
+    max_km = max_drive_hours * 80 / 1.3
+
+    expanded = list(origins)
+    seen = set(origins)
+
+    for origin_code in origins:
+        origin = airport_map.get(origin_code)
+        if not origin:
+            continue
+        for ap in airports:
+            if ap["iata"] in seen:
+                continue
+            dist = _haversine_km(origin["lat"], origin["lon"], ap["lat"], ap["lon"])
+            if dist <= max_km:
+                expanded.append(ap["iata"])
+                seen.add(ap["iata"])
+                logger.info(
+                    "nearby_airport_added",
+                    origin=origin_code,
+                    nearby=ap["iata"],
+                    dist_km=round(dist),
+                    drive_h=round(dist * 1.3 / 80, 1),
+                )
+
+    return expanded
 
 
 async def scan_route(

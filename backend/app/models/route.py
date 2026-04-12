@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,8 @@ class Route(Base):
     # For round-trips: how many days after departure to return (e.g. 7 = one week)
     return_date_offset_days: Mapped[int | None] = mapped_column(nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Max hours the user is willing to drive to reach a cheaper nearby airport (0 = no driving)
+    max_drive_hours: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     # HOT | WARM | COLD — updated by priority engine
     priority_tier: Mapped[str] = mapped_column(String(10), default="WARM", nullable=False)
     created_at: Mapped[datetime] = mapped_column(

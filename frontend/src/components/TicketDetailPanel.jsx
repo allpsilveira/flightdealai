@@ -136,17 +136,13 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
   const savings     = typicalMid ? Math.round(typicalMid - deal.best_price_usd) : null;
   const savingsPct  = typicalMid && savings > 0 ? Math.round((savings / typicalMid) * 100) : null;
 
-  const cabinSearchLabel = {
-    BUSINESS: "business class", FIRST: "first class", PREMIUM_ECONOMY: "premium economy",
-  };
-  const googleFlightsUrl = (() => {
+  // Build a Skyscanner deep link — direct to that date/route/cabin
+  const skyscannerUrl = (() => {
     if (!deal.origin || !deal.destination || !deal.departure_date) return null;
-    const d = new Date(deal.departure_date + "T12:00:00");
-    const dateStr = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    const cls = cabinSearchLabel[deal.cabin_class] ?? "business class";
-    return `https://www.google.com/travel/flights?q=${encodeURIComponent(
-      `${cls} flights ${deal.origin} to ${deal.destination} ${dateStr}`
-    )}`;
+    const dateStr = deal.departure_date.replace(/-/g, ""); // YYYYMMDD
+    const cabinMap = { BUSINESS: "business", FIRST: "first", PREMIUM_ECONOMY: "premiumeconomy" };
+    const cabin = cabinMap[deal.cabin_class] ?? "business";
+    return `https://www.skyscanner.com/transport/flights/${deal.origin.toLowerCase()}/${deal.destination.toLowerCase()}/${dateStr}/?cabin_class=${cabin}&adultsv2=1`;
   })();
 
   const scoreRows = [
@@ -296,15 +292,15 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
                       Google: {deal.google_price_level}
                     </span>
                   )}
-                  {googleFlightsUrl && (
+                  {skyscannerUrl && (
                     <a
-                      href={googleFlightsUrl}
+                      href={skyscannerUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                                 bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+                                 bg-[#0770e3] hover:bg-blue-700 text-white transition-colors"
                     >
-                      Search Google Flights ↗
+                      Search on Skyscanner ↗
                     </a>
                   )}
                 </div>
@@ -617,12 +613,11 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
                       const airlineName = AIRLINE_NAME[offer.primary_airline] ?? offer.primary_airline ?? "Unknown";
                       const depDate = offer.departure_date
                         ? new Date(offer.departure_date + "T12:00:00") : null;
-                      const gfUrl = offer.origin && offer.destination
-                        ? `https://www.google.com/travel/flights?q=${encodeURIComponent(
-                            `${airlineName} flights ${offer.origin} to ${offer.destination}${
-                              depDate ? " " + depDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""
-                            }`
-                          )}`
+                      // Skyscanner deep link — specific date, route, cabin
+                      const offerDateStr = offer.departure_date?.replace(/-/g, "") ?? deal.departure_date?.replace(/-/g, "");
+                      const offerCabin = { BUSINESS: "business", FIRST: "first", PREMIUM_ECONOMY: "premiumeconomy" }[deal.cabin_class] ?? "business";
+                      const gfUrl = (offer.origin ?? deal.origin) && (offer.destination ?? deal.destination) && offerDateStr
+                        ? `https://www.skyscanner.com/transport/flights/${(offer.origin ?? deal.origin).toLowerCase()}/${(offer.destination ?? deal.destination).toLowerCase()}/${offerDateStr}/?cabin_class=${offerCabin}&adultsv2=1`
                         : null;
                       return (
                         <div

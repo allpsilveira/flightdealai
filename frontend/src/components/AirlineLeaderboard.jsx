@@ -100,17 +100,10 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
         // Savings vs cheapest (only show for non-cheapest rows)
         const overBy = i > 0 ? Math.round(offer.price_usd - cheapest) : null;
 
-        // Google Flights search link for this airline + route + date
-        const depDate = offer.departure_date
-          ? new Date(offer.departure_date + "T12:00:00")
-          : null;
-        const depFormatted = depDate
-          ? depDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-          : "";
-        const gfUrl = offer.origin && offer.destination
-          ? `https://www.google.com/travel/flights?q=${encodeURIComponent(
-              `${name} flights ${offer.origin} to ${offer.destination}${depFormatted ? " " + depFormatted : ""}`
-            )}`
+        // Skyscanner deep link — specific date + route + cabin
+        const dateStr = offer.departure_date?.replace(/-/g, "") ?? null;
+        const gfUrl = offer.origin && offer.destination && dateStr
+          ? `https://www.skyscanner.com/transport/flights/${offer.origin.toLowerCase()}/${offer.destination.toLowerCase()}/${dateStr}/?cabin_class=business&adultsv2=1`
           : null;
 
         return (
@@ -185,9 +178,9 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
                   className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium"
-                  title={`Search ${name} on Google Flights`}
+                  title={`Search ${name} on Skyscanner`}
                 >
-                  Search ↗
+                  Skyscanner ↗
                 </a>
               )}
             </div>

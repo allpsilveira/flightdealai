@@ -22,6 +22,7 @@ class RouteCreate(BaseModel):
     date_to: date
     trip_type: str = "ONE_WAY"
     return_date_offset_days: int | None = None
+    max_drive_hours: float | None = None
 
 
 class RouteResponse(BaseModel):
@@ -34,6 +35,7 @@ class RouteResponse(BaseModel):
     date_to: date
     trip_type: str
     return_date_offset_days: int | None
+    max_drive_hours: float | None
     is_active: bool
     priority_tier: str
 
