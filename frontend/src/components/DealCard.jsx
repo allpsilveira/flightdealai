@@ -26,10 +26,6 @@ const CABIN_BY_AIRLINE = cabinQuality.reduce((acc, e) => {
 const airlineLogo = (code) =>
   code ? `https://images.kiwi.com/airlines/64/${code}.png` : null;
 
-const googleFlightsUrl = (origin, dest, depDate, cabin) => {
-  const cabinMap = { BUSINESS: "business", FIRST: "first", PREMIUM_ECONOMY: "premium_economy", ECONOMY: "economy" };
-  return `https://www.google.com/travel/flights/search?tfs=CBwQARoXagwIAxIIL2cvMTFi&hl=en&curr=USD#flt=${origin}.${dest}.${depDate};c:USD;e:1;sd:1;t:${cabinMap[cabin] ?? "business"}`;
-};
 
 export default function DealCard({ deal, onClick }) {
   const [showDetail, setShowDetail] = useState(false);
@@ -114,7 +110,7 @@ export default function DealCard({ deal, onClick }) {
             <p className={`text-xs font-medium tabular-nums mt-0.5 ${
               delta < 0 ? "text-emerald-500" : delta > 0 ? "text-red-500" : "text-zinc-400"
             }`}>
-              {delta < 0 ? `↓ $${Math.abs(delta)}` : delta > 0 ? `↑ $${delta}` : "—"} vs last scan
+              {delta < 0 ? `↓ $${Math.abs(delta)}` : delta > 0 ? `↑ $${delta}` : "—"}
             </p>
           )}
         </div>
@@ -157,16 +153,16 @@ export default function DealCard({ deal, onClick }) {
       {/* ── Badges ────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-1.5">
         {isStrong && !isGem && (
-          <span className="badge-strong-buy">Strong Buy · {Math.round(deal.score_total)}</span>
+          <span className="badge-strong-buy">Strong Buy · {Math.round((deal.score_total / 170) * 100)}</span>
         )}
         {isBuy && !isStrong && (
-          <span className="badge-buy">Buy · {Math.round(deal.score_total)}</span>
+          <span className="badge-buy">Buy · {Math.round((deal.score_total / 170) * 100)}</span>
         )}
         {deal.action === "WATCH" && (
-          <span className="badge-watch">Watch · {Math.round(deal.score_total)}</span>
+          <span className="badge-watch">Watch · {Math.round((deal.score_total / 170) * 100)}</span>
         )}
         {!isGem && !isStrong && !isBuy && deal.action !== "WATCH" && !coldStart && (
-          <span className="badge-normal">Score {Math.round(deal.score_total)}/170</span>
+          <span className="badge-normal">Score {Math.round((deal.score_total / 170) * 100)}/100</span>
         )}
 
         {deal.is_error_fare && (
@@ -261,21 +257,14 @@ export default function DealCard({ deal, onClick }) {
         </p>
       )}
 
-      {/* ── Footer: book link ─────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between pt-1">
+      {/* ── Footer ────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800">
         <span className="text-2xs text-zinc-400 dark:text-zinc-500">
-          {coldStart ? "Monitoring" : `Score ${Math.round(deal.score_total)}/170`}
+          {coldStart ? "Monitoring — building baseline" : `Score ${Math.round((deal.score_total / 170) * 100)}/100`}
         </span>
-        <a
-          href={googleFlightsUrl(deal.origin, deal.destination, deal.departure_date, deal.cabin_class)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="text-2xs font-medium text-brand-500 hover:text-brand-600 dark:hover:text-brand-400
-                     transition-colors flex items-center gap-1"
-        >
-          Search on Google Flights ↗
-        </a>
+        <span className="text-2xs text-zinc-400 dark:text-zinc-500">
+          Tap for details ↗
+        </span>
       </div>
     </div>
   );

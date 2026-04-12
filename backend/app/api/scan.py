@@ -1,6 +1,8 @@
 """
 Manual scan API — triggers a full scan + scoring pipeline on demand.
-Stores raw prices, runs deal_pipeline, logs scan history, returns results.
+
+force_enrich=True  → Scan Now button: calls SerpApi + Duffel + Seats.aero
+force_enrich=False → 4h background tripwire: SerpApi only, no enrichment
 """
 import uuid
 from datetime import date, datetime, timezone
@@ -21,12 +23,12 @@ router = APIRouter()
 
 
 class ManualScanRequest(BaseModel):
-    origins:       list[str]
-    destinations:  list[str]
-    cabin_classes: list[str]
-    date_from:     date
-    date_to:       date
-    include_searchapi: bool = True
+    origins:         list[str]
+    destinations:    list[str]
+    cabin_classes:   list[str]
+    date_from:       date
+    date_to:         date
+    force_enrich:    bool = True   # True = also call Duffel + Seats.aero
 
     @field_validator("cabin_classes")
     @classmethod
@@ -48,6 +50,7 @@ class ScanResponse(BaseModel):
     best_prices:      list[dict]
     deals_scored:     int
     scan_history_id:  str
+    enriched:         bool
 
 
 class ScanHistoryResponse(BaseModel):
@@ -79,6 +82,7 @@ async def _run_and_log(
     deep: bool,
     db: AsyncSession,
     trigger_type: str = "manual",
+    force_enrich: bool = True,
 ) -> ScanResponse:
     # ── 1. Collect raw prices via SerpApi ─────────────────────────────────────
     scan_result = await scan_route(
@@ -92,13 +96,14 @@ async def _run_and_log(
         deep=deep,
     )
 
-    # ── 2. Run full scoring pipeline → writes DealAnalysis rows ───────────────
+    # ── 2. Run full scoring pipeline → writes DealAnalysis + FlightOffer rows ─
     deals = []
     try:
         deals = await run_pipeline_batch(
             route_id=route_id,
             scan_results=scan_result,
             db=db,
+            force_enrich=force_enrich,
         )
     except Exception as exc:
         import structlog
@@ -126,9 +131,10 @@ async def _run_and_log(
     await db.commit()
 
     return ScanResponse(
-        **scan_result,
+        **{k: v for k, v in scan_result.items() if k != "all_offers"},
         deals_scored=len(deals),
         scan_history_id=str(history.id),
+        enriched=force_enrich,
     )
 
 
@@ -138,7 +144,10 @@ async def manual_scan(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger an ad-hoc scan with custom parameters."""
+    """
+    Trigger an ad-hoc scan. force_enrich=True (default) calls Duffel + Seats.aero
+    for the full price comparison panel. Set false for a quick SerpApi-only check.
+    """
     return await _run_and_log(
         route_id=uuid.uuid4(),
         origins=req.origins,
@@ -146,19 +155,24 @@ async def manual_scan(
         cabin_classes=req.cabin_classes,
         date_from=req.date_from,
         date_to=req.date_to,
-        deep=req.include_searchapi,
+        deep=True,
         db=db,
+        force_enrich=req.force_enrich,
     )
 
 
 @router.post("/route/{route_id}", response_model=ScanResponse)
 async def scan_saved_route(
     route_id: uuid.UUID,
-    include_searchapi: bool = True,
+    force_enrich: bool = True,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger a scan for an existing saved route by ID."""
+    """
+    Trigger a scan for a saved route. This is the "Scan Now" button endpoint.
+    force_enrich=True (default) — calls all three sources.
+    force_enrich=False — used by the 4h background scheduler (SerpApi only).
+    """
     result = await db.execute(select(Route).where(Route.id == route_id))
     route = result.scalar_one_or_none()
     if not route:
@@ -171,8 +185,10 @@ async def scan_saved_route(
         cabin_classes=route.cabin_classes,
         date_from=route.date_from,
         date_to=route.date_to,
-        deep=include_searchapi,
+        deep=True,
         db=db,
+        trigger_type="manual",
+        force_enrich=force_enrich,
     )
 
 

@@ -1,13 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "./stores/useAuth";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import RouteManager from "./pages/RouteManager";
-import PriceHistory from "./pages/PriceHistory";
-import AirportCompare from "./pages/AirportCompare";
-import AlertSettings from "./pages/AlertSettings";
+import Home from "./pages/Home";
+import RouteDetail from "./pages/RouteDetail";
 import Settings from "./pages/Settings";
-import ScanHistory from "./pages/ScanHistory";
 import Layout from "./components/Layout";
 
 function RequireAuth({ children }) {
@@ -28,13 +24,9 @@ export default function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<Dashboard />} />
-          <Route path="routes" element={<RouteManager />} />
-          <Route path="prices" element={<PriceHistory />} />
-          <Route path="airports" element={<AirportCompare />} />
-          <Route path="alerts" element={<AlertSettings />} />
+          <Route index element={<Home />} />
+          <Route path="route/:id" element={<RouteDetail />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="scans" element={<ScanHistory />} />
         </Route>
       </Routes>
     </BrowserRouter>

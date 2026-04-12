@@ -52,8 +52,9 @@ export default function Settings() {
           <div>
             <label className="label block mb-1.5">Language</label>
             <select value={language} onChange={(e) => setLanguage(e.target.value)} className="input">
-              <option value="en">English</option>
-              <option value="pt">Português</option>
+              <option value="en">English 🇺🇸</option>
+              <option value="es">Español 🇪🇸</option>
+              <option value="pt">Português 🇧🇷</option>
             </select>
             <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5">
               AI recommendations and alerts will be delivered in this language.
@@ -142,7 +143,7 @@ export default function Settings() {
         </p>
       )}
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 mb-6">
         <button onClick={save} disabled={saving} className="btn-primary">
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
         </button>
@@ -153,6 +154,35 @@ export default function Settings() {
           Sign out
         </button>
       </div>
+
+      {/* ── Developer Tools ───────────────────────────────────────────── */}
+      {user?.is_superuser && (
+        <div className="card p-6">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Developer Tools</h2>
+          <div className="space-y-3 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {[
+              { label: "API Docs (Swagger)", desc: "FastAPI interactive documentation", href: "/api/docs" },
+              { label: "Airflow UI",         desc: "DAG monitoring and manual triggers", href: "http://localhost:8080" },
+              { label: "Grafana",            desc: "Internal metrics dashboard", href: "http://localhost:3000" },
+            ].map(({ label, desc, href }) => (
+              <div key={label} className="flex items-center justify-between pt-3 first:pt-0">
+                <div>
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{label}</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{desc}</p>
+                </div>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-brand-500 hover:text-brand-600 font-medium ml-4 flex-shrink-0"
+                >
+                  Open ↗
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

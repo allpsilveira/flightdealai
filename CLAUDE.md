@@ -39,14 +39,18 @@ FlyLuxuryDeals is a personal luxury travel deal intelligence platform. It monito
 ## Data Sources (3 Active)
 
 > **Note:** Amadeus self-service was decommissioned July 2026. Kiwi Tequila closed public registration.
-> Stack was revised to 3 confirmed working sources.
+> Stack is 3 confirmed working sources: SerpApi + Duffel + Seats.aero.
+> Amadeus and Kiwi tables (`amadeus_prices`, `kiwi_prices`) remain in the DB for historical data but
+> are no longer written to. Do not add code that references them.
 
-### Source 1: SerpApi (Google Flights) — PRIMARY SCANNER (runs every 4h + 3x/day full)
-- **Role:** Primary and only scheduled scan source. Quick checks every 4h detect price changes. Full scans 3x/day capture trend intelligence.
+### Source 1: SerpApi (Google Flights) — PRIMARY SCANNER
+- **Role:** Only scheduled scan source. Runs every 4h (quick price check) and 3× daily (full scan with trend data). Also parses **all individual offers** (per airline + stop count) to populate `flight_offers` table.
 - **Auth:** `api_key` query param
-- **Cost:** $25/month (Starter — 1,000 searches/month, covers 5 routes at 3x/day)
-- **Key unique data:** `price_insights.price_level` (low/typical/high), `price_insights.typical_price_range`, `price_insights.price_history` (timestamped array)
+- **Cost:** $25/month (Starter — 1,000 searches/month)
+- **Key unique data:** `price_insights.price_level` (low/typical/high), `price_insights.typical_price_range`, `price_insights.price_history`, all offers with airline + stops + duration
 - **Cabin codes:** 1=Economy, 2=Premium Economy, 3=Business, 4=First
+- **What we extract from each offer:** `price`, `flights[].airline_logo` (→ IATA), `total_duration`, stop count = `len(flights) - 1`
+- **Stored per scan:** one `GooglePrice` row (overall cheapest) + N `FlightOffer` rows (cheapest per airline+stops combo)
 - **Search params:**
 ```python
 {
@@ -59,11 +63,11 @@ FlyLuxuryDeals is a personal luxury travel deal intelligence platform. It monito
 }
 ```
 
-### Source 2: Duffel — FARE BRAND DETAIL (on-demand, when deal detected)
-- **Role:** Only source of fare brand names ("Business Lite"), offer expiry timestamps, detailed conditions, ancillaries. Fires when Amadeus/SearchApi detects a potential deal.
+### Source 2: Duffel — DIRECT AIRLINE BOOKING PRICE
+- **Role:** Returns cash price via airline GDS with fare brand name ("Business Lite"), conditions, refundability, expiry. Used for the price comparison panel (SerpApi price vs Duffel direct price vs award). Runs once daily at 7 AM and on every "Scan Now" action.
 - **Auth:** Bearer token
 - **Python SDK:** `duffel-api`
-- **Cost:** $0.005/search (on-demand only = ~$1.50-5/month)
+- **Cost:** $0.005/search (~$2.25/month for 1 route × 15 combos/day)
 - **Key unique data:** `fare_brand_name`, `fare_basis_code`, `expires_at`, `conditions` (refund/change policies + penalties), `available_services`, `baggages`
 - **Rate limit:** 120 requests/60 seconds
 - **Search params:**
@@ -76,8 +80,8 @@ duffel.offer_requests.create({
 })
 ```
 
-### Source 3: Seats.aero — AWARD AVAILABILITY (on-demand, when deal detected)
-- **Role:** Award/miles availability across 24 loyalty programs. When a cash deal is found, check if the same route has award space and calculate cents-per-point value.
+### Source 3: Seats.aero — AWARD AVAILABILITY
+- **Role:** Award/miles availability across 24 loyalty programs. Shown alongside cash prices in the deal detail price comparison panel. Runs once daily at 7 AM and on every "Scan Now" action.
 - **Auth:** `Partner-Authorization: pro_xxxxx` header
 - **Cost:** $10/month (Pro subscription, flat)
 - **Rate limit:** 1,000 API calls/day
@@ -94,23 +98,43 @@ duffel.offer_requests.create({
 - Chase UR → Aeroplan 1:1, Amex MR → Smiles 1:1, Capital One → Avianca LifeMiles 1:1, etc.
 - Referenced when award availability is found
 
+### API Rationalization — Evaluated and Rejected Sources
+The following APIs were evaluated in April 2026 and rejected. Do not integrate any of them:
+- **Aviation Edge** ($299/mo): Flight tracking/schedules only, no pricing data.
+- **Aviationstack** ($49.99/mo): Flight tracking/status only, no pricing data.
+- **OAG** ($249/mo): Airline schedules, enterprise-grade. No pricing data.
+- **Flightradar24**: Real-time aircraft positions only. No pricing data.
+- **FlightAPI.io** ($49/mo): Returns OTA prices but WITHOUT price_insights/trend data. SerpApi does this better for $25/mo.
+- **RapidAPI Flight Collection**: Marketplace aggregator, no unique value over current stack.
+
 ---
 
 ## Scanning Strategy (Cost-Optimized)
 
-**NOT brute-force. Intelligent tiered scanning.**
+**NOT brute-force. Tiered by frequency and cost.**
 
 ```
-TIER 1 — SCHEDULED (SerpApi, $25/mo flat):
-  Every 4h  → quick price check (detect changes, low API cost)
+TIER 1 — SCHEDULED PRICE SCAN (SerpApi, $25/mo flat):
+  Every 4h  → quick price check only (SerpApi, no enrichment)
   3x/day    → full scan: price + price_level + price_history + typical_range
+              Also parses all offers → populates flight_offers table
 
-TIER 2 — ON-DEMAND (fires only when score ≥ 80 or GEM detected):
-  Duffel     → fare brand name, conditions, expiry (~$2-5/mo)
+TIER 2 — DAILY ENRICHMENT (fires once at 7 AM for all active routes):
+  Duffel     → direct airline cash price, fare brand, conditions (~$2.25/mo at 1 route)
   Seats.aero → award availability + CPP calculation ($10/mo flat)
+  NOTE: NOT score-gated. Runs for every route+cabin+date combo once per day.
 
-TOTAL: ~$37-40/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2-5)
+TIER 3 — ON-DEMAND ("Scan Now" button):
+  All three sources fire immediately: SerpApi + Duffel + Seats.aero
+  Always enriches regardless of score.
+
+TOTAL: ~$37/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2.25)
 ```
+
+**Enrichment trigger logic (deal_pipeline.py):**
+- `force_enrich=False` → SerpApi 4h quick scan, no Duffel/Seats.aero call
+- `force_enrich=True`  → Daily 7 AM enrichment OR "Scan Now" — always enriches
+- Score-based gating (`ENRICH_THRESHOLD`) is removed. Score quality improves independently as historical data accumulates.
 
 ---
 
@@ -154,25 +178,25 @@ TOTAL: ~$37-40/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2-5)
 
 ### Main DAG (per route, per cabin class — dynamically generated):
 ```
-fetch_serpapi ──→ cross_reference ──→ score_deal ──→ branch_score
-                                                          │
-                                              ┌───────────┴──────────┐
-                                            ≥50                      <50
-                                              │                       │
-                                         ai_analysis             log_skip
-                                              │
-                                        branch_action
-                                              │
-                              ┌───────────────┴──────────────┐
-                          BUY/GEM                         WATCH/NORMAL
-                              │                               │
-                        enrich_duffel                  update_dashboard
-                              │
-                        enrich_awards (Seats.aero)
-                              │
-                        dispatch_alerts (WhatsApp + Web Push)
-                              │
-                        update_priority          ◄── (all paths converge)
+fetch_serpapi ──→ cross_reference ──→ score_deal ──→ generate_events ──→ branch_score
+                                                                               │
+                                                               ┌───────────────┴──────────┐
+                                                             ≥50                          <50
+                                                               │                           │
+                                                          ai_analysis                 log_skip
+                                                               │
+                                                         branch_action
+                                                               │
+                                               ┌───────────────┴──────────────┐
+                                           BUY/GEM                         WATCH/NORMAL
+                                               │                               │
+                                         enrich_duffel                  update_dashboard
+                                               │
+                                         enrich_awards (Seats.aero)
+                                               │
+                                         dispatch_alerts (WhatsApp + Web Push)
+                                               │
+                                         update_priority          ◄── (all paths converge)
 ```
 
 **Key Airflow features used:**
@@ -198,15 +222,121 @@ fetch_serpapi ──→ cross_reference ──→ score_deal ──→ branch_sc
 
 **Regular tables:** users, routes (with origins[], destinations[], cabin_classes[]), alert_rules, cabin_quality, transfer_partners, program_baselines
 
-**Hypertables (time-series):** google_prices (SerpApi), duffel_prices, award_prices (Seats.aero), deal_analysis
+**Hypertables (time-series):** google_prices (SerpApi best price per scan), flight_offers (all offers per airline+stops per scan), duffel_prices, award_prices (Seats.aero), deal_analysis
 
-**Continuous aggregates:** price_hourly (per source), price_daily_stats (with percentiles p5/p10/p20/p25/p30/median/p75/p90, stddev, min)
+**Dead tables (do not write to):** amadeus_prices, kiwi_prices — kept for historical data only
 
-See the full SQL schema in the Final v2 Specification document.
+**Continuous aggregates:** google_price_hourly, price_daily_stats (with percentiles p5/p10/p20/p25/p30/median/p75/p90, stddev, min)
+
+**flight_offers table:** Stores every individual offer from SerpApi per scan, grouped by (primary_airline, stops) — cheapest per group. Linked to deal_analysis via `deal_analysis_id` FK. Used to power the "Flight Options" breakdown in the deal detail modal.
+
+### Route Events Table (powers Zillow-style activity timeline)
+```sql
+CREATE TABLE route_events (
+    id SERIAL PRIMARY KEY,
+    route_id UUID REFERENCES routes(id),
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    event_type VARCHAR(30) NOT NULL,
+    -- Types: 'price_drop', 'price_rise', 'error_fare', 'award_opened',
+    --        'award_closed', 'airport_arbitrage', 'trend_reversal',
+    --        'new_low', 'stable', 'monitoring_started', 'fare_brand_detected',
+    --        'scarcity_alert', 'ai_insight'
+    severity VARCHAR(10) DEFAULT 'info',
+    -- 'critical' (error fare), 'high' (big drop/award), 'medium', 'low', 'info'
+    headline TEXT NOT NULL,
+    detail TEXT,
+    subtext TEXT,
+    airline VARCHAR(50),
+    price_usd DECIMAL,
+    previous_price_usd DECIMAL,
+    deal_analysis_id INTEGER,
+    metadata JSONB
+);
+CREATE INDEX idx_route_events_route ON route_events(route_id, timestamp DESC);
+```
+
+The `generate_events` task writes to this table after every scan. Only significant events are created — collapse "no change" scans into max 1 "stable" event per day.
 
 ---
 
-## Frontend — React + Vite + Tailwind
+## Frontend Architecture — 3 Levels + Settings
+
+The app is route-centric. Everything revolves around tracked routes.
+
+### Global Header (all pages)
+- Logo: "FlyLuxuryDeals" in serif font
+- Language flags: US (English), Spain (Spanish), Brazil (Portuguese). Active = full opacity, inactive = dimmed. Click switches all text + AI output + WhatsApp language.
+- Navigation: Home | Settings
+- User avatar / logout
+
+### LEVEL 1: Home — My Routes
+
+Route cards sorted by urgency (highest-score first). Each card shows:
+- Route + cabin + dates + trip type
+- Current best price + airline + trend arrow
+- Score badge + special flags (Error fare?, Google: LOW, Award available)
+- Latest event preview (one-liner from timeline)
+- Left border color = urgency (red=critical, green=deal, gold=award, default=neutral)
+- Click → Level 2
+
+**Top bar:** Route count, last scan time, "+ Add route" button, cabin class filter pills.
+
+### Route Creation Modal (from "+ Add route")
+1. Origin airport(s) — IATA autocomplete, multi-select
+2. Destination airport(s) — same
+3. Trip type — Round trip / Two one-ways / Monitor both (recommended default)
+4. Cabin class — multi-select: Business / First / Premium Economy
+5. Dates — Specific date / Date range / Flexible (next 60/90 days)
+6. Confirmation — Summary + estimated monthly cost + "Start monitoring"
+
+### LEVEL 2: Route Detail
+
+Two-column layout. Left ~60%, Right ~40%.
+
+**Left column:**
+
+**Price chart (top, always visible):**
+- Recharts line/area chart, daily lows per airline (color-coded lines)
+- p10-p90 shaded percentile band + Google typical_price_range overlay
+- Current price dot + label. Hover tooltips. Time range toggle (7d/30d/60d/90d).
+- Below: cheapest-date calendar strip, color-coded (green=cheap, red=expensive)
+
+**Activity timeline (below chart, scrollable):**
+- Zillow-style vertical event feed from route_events table
+- Each event: severity dot on timeline line, timestamp, type label, headline, detail, subtext
+- Severity colors: red=error fare, gold=award, green=price drop, blue=info, grey=stable
+- Click event → opens Level 3 ticket detail panel
+
+**Right column:**
+
+**Airline leaderboard:** Sorted by price. Each row: airline, price, change indicator, stops, duration, historical low. Click → highlights chart line + opens Level 3.
+
+**Best award option:** Program, miles, taxes, CPP value, transfer source.
+
+**AI insight:** Claude recommendation in user's language.
+
+**Trip comparison (if "monitor both"):** Round trip vs two one-ways with savings.
+
+**Route header:** Route name, score, Google badge, "Scan Now" button, edit/pause/delete, per-route alert overrides.
+
+### LEVEL 3: Ticket Detail (slide-in panel from right)
+
+Triggered by clicking airline row, timeline event, or chart price point.
+
+**Fare details:** Airline, price, fare brand, cabin quality badge, conditions, baggage, offer expiry, "Book now" link.
+
+**Airport comparison (embedded, NOT a separate page):** Mini-map with origin airports + price pins. Table: airport, price, difference, drive time. "Save $340 from MCO" highlight.
+
+**Award comparison (if available):** Cash vs miles side-by-side, CPP calculation, transfer partners, "saves $X vs cash" verdict.
+
+### SETTINGS (single page)
+
+**Account:** Email, password, WhatsApp number, language.
+**Notifications:** WhatsApp/push/email toggles, default score threshold, error fare alerts, award alerts.
+**Display:** Currency, date format.
+**Developer Tools:** Links to Swagger UI (`/docs`), Airflow UI, Grafana, GitHub repo. Visible only to superusers.
+
+Route-specific alert overrides live on Route Detail, not here.
 
 ### Design Direction: Luxury Travel Concierge
 - **Aesthetic:** Minimal, elegant, refined. Think Amex Platinum app meets Centurion Lounge.
@@ -216,42 +346,11 @@ See the full SQL schema in the Final v2 Specification document.
 - **Cards:** Frosted glass effect or subtle elevation. Generous whitespace. Never cluttered.
 - **Maps:** Elegant dark-themed map with gold/champagne pins for airports, price labels overlaid.
 
-### Pages:
-
-**1. Dashboard (main — deal feed)**
-- Live deal feed sorted by score, WebSocket updates
-- Each deal card shows: price, score badge (color-coded), AI recommendation, price context ("bottom 8%, Google says LOW"), airport comparison ("MCO saves $700"), cabin quality badge, fare brand if detected, seats remaining, award alternative if available
-- Filter bar: cabin class, airport, airline, score threshold, show GEMs only
-- Map view toggle: see airports with current best prices overlaid
-
-**2. Route Manager**
-- Add route: origin airport(s), destination airport(s), cabin class(es), date range
-- Edit/pause/delete routes
-- Priority tier indicator (HOT/WARM/COLD)
-
-**3. Price History**
-- Route selector
-- Recharts time-series with percentile bands (p10-p90 shaded)
-- Google typical price range as overlay band
-- Current price position marker
-- Trend direction arrow
-- Toggle between sources
-
-**4. Airport Comparison**
-- Map with MIA, MCO, FLL (or whatever airports) showing prices
-- Side-by-side stats: current best, 30/60/90-day averages
-- "Drive value" indicator
-
-**5. Alert Settings**
-- Per-route alert rules
-- Score threshold, GEM alerts, scarcity alerts, trend reversal
-- WhatsApp toggle + web push toggle
-- Alert history
-
-**6. Settings**
-- Account (email, WhatsApp number)
-- Language (English / Portuguese)
-- Preferences
+### Pages/Tabs that do NOT exist:
+- No Airport Comparison page (embedded in Level 3 Ticket Detail)
+- No Alert Settings page (merged into Settings; route overrides on Route Detail)
+- No Route Manager page (CRUD via Home + Route Detail)
+- No separate Deal Feed page (Home IS the feed)
 
 ---
 
@@ -276,6 +375,7 @@ flightdeal-ai/
 │   │   │   ├── deals.py
 │   │   │   ├── prices.py
 │   │   │   ├── awards.py
+│   │   │   ├── events.py
 │   │   │   ├── airports.py
 │   │   │   ├── cabins.py
 │   │   │   ├── alerts.py
@@ -287,6 +387,7 @@ flightdeal-ai/
 │   │   │   ├── cross_reference.py
 │   │   │   ├── scoring.py
 │   │   │   ├── stats.py
+│   │   │   ├── event_generator.py
 │   │   │   ├── ingestion.py
 │   │   │   ├── scanner.py
 │   │   │   ├── deal_pipeline.py
@@ -307,6 +408,7 @@ flightdeal-ai/
 │   │   ├── fetch_awards.py
 │   │   ├── cross_reference.py
 │   │   ├── score_deal.py
+│   │   ├── generate_events.py
 │   │   ├── ai_analysis.py
 │   │   ├── dispatch_alerts.py
 │   │   └── update_priority.py
@@ -322,27 +424,33 @@ flightdeal-ai/
 │   │   ├── App.jsx
 │   │   ├── pages/
 │   │   │   ├── Login.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── RouteManager.jsx
-│   │   │   ├── PriceHistory.jsx
-│   │   │   ├── AirportCompare.jsx
-│   │   │   ├── AlertSettings.jsx
+│   │   │   ├── Home.jsx
+│   │   │   ├── RouteDetail.jsx
 │   │   │   └── Settings.jsx
 │   │   ├── components/
-│   │   │   ├── DealCard.jsx
-│   │   │   ├── ScoreBadge.jsx
-│   │   │   ├── SourceBadges.jsx
-│   │   │   ├── GemBadge.jsx
-│   │   │   ├── CabinQualityBadge.jsx
+│   │   │   ├── GlobalHeader.jsx
+│   │   │   ├── RouteCard.jsx
+│   │   │   ├── AddRouteModal.jsx
 │   │   │   ├── PriceChart.jsx
-│   │   │   ├── AirportMap.jsx
+│   │   │   ├── CheapestDateStrip.jsx
+│   │   │   ├── ActivityTimeline.jsx
+│   │   │   ├── TimelineEvent.jsx
+│   │   │   ├── AirlineLeaderboard.jsx
+│   │   │   ├── AirlineRow.jsx
+│   │   │   ├── TicketDetailPanel.jsx
+│   │   │   ├── AirportComparison.jsx
 │   │   │   ├── AwardComparison.jsx
+│   │   │   ├── CabinQualityBadge.jsx
+│   │   │   ├── ScoreBadge.jsx
 │   │   │   ├── TrendArrow.jsx
-│   │   │   └── ExpiryCountdown.jsx
+│   │   │   ├── AIInsightPanel.jsx
+│   │   │   ├── TripTypeComparison.jsx
+│   │   │   └── LanguageSwitcher.jsx
 │   │   └── stores/
-│   │       ├── useDeals.js
+│   │       ├── useRoutes.js
+│   │       ├── useEvents.js
 │   │       ├── useAuth.js
-│   │       └── useAlerts.js
+│   │       └── useSettings.js
 ├── nginx/
 │   └── conf.d/default.conf
 └── grafana/
@@ -363,19 +471,18 @@ flightdeal-ai/
 - .env.example
 
 ### Phase 2: Data Sources (Days 4-8)
-- Amadeus client (tripwire scanner)
-- SearchApi.io client (Google Flights with price_insights)
-- Kiwi Tequila client (creative routing)
-- Duffel client (on-demand fare brand detail)
-- Seats.aero client (on-demand award check)
+- SerpApi client (Google Flights with price_insights + all-offers parsing)
+- Duffel client (fare brand detail)
+- Seats.aero client (award check)
 - Data normalization + storage to hypertables
 - CLI test command for manual scan
 
 ### Phase 3: Intelligence Engine (Days 9-13)
 - Rolling statistics calculator (TimescaleDB percentiles + z-scores)
-- Cold-start bootstrap (SearchApi typical_range seed)
+- Cold-start bootstrap (SerpApi typical_range seed)
 - Cross-reference engine (gem detection, match type classification)
 - Dynamic scoring engine (120 cash + 50 award points)
+- Event generator (route_events table, 14 event types)
 - Award CPP calculator + transfer partner mapping
 - Airport comparison logic
 - Fare brand detection
@@ -384,7 +491,7 @@ flightdeal-ai/
 
 ### Phase 4: Airflow Orchestration (Days 14-17)
 - DAG factory (dynamic DAG per route from DB)
-- All task modules (fetch, xref, score, branch, ai, alert, priority)
+- All task modules (fetch, xref, score, generate_events, branch, ai, alert, priority)
 - Parallel execution + branching logic
 - XCom data flow
 - Retry + SLA configuration
@@ -392,14 +499,12 @@ flightdeal-ai/
 - Airflow connection store for all API keys
 
 ### Phase 5: Web Application (Days 18-25)
-- Dashboard with deal feed (WebSocket live updates)
-- DealCard component (full data display, luxury styling)
-- Map view with airport price overlays (MapLibre/Leaflet)
-- Route Manager (add/edit/delete routes dynamically)
-- Price History page (Recharts with percentile bands)
-- Airport Comparison page
-- Alert Settings page
-- Settings page (language, WhatsApp number)
+- Home page (route cards, urgency sort, WebSocket live updates)
+- Route Creation Modal (5-step flow)
+- Route Detail page (price chart + cheapest-date strip + activity timeline + airline leaderboard)
+- Ticket Detail panel (slide-in, fare + airport comparison + award comparison)
+- Settings page (account + notifications + display + developer tools)
+- Global Header with language switcher (EN/ES/PT)
 - Responsive design
 
 ### Phase 6: Alerts + Polish (Days 26-30)
@@ -459,13 +564,19 @@ APP_DOMAIN=                # e.g. flightdeal.yourdomain.com
 
 ## Key Rules for Claude Code
 
-1. **Always use the luxury concierge aesthetic** for frontend. Deep navy/charcoal, gold/champagne accents, elegant serif headings, generous whitespace.
+1. **Keep the existing design skeleton.** Deep navy/charcoal + gold/champagne + serif headings. Do NOT change colors, fonts, or visual identity. Improve animations, transitions, shadows, and spacing — but keep the same look.
 2. **Never hardcode price thresholds.** All scoring is percentile/z-score based.
 3. **Backend is async throughout.** Use `async def` for all FastAPI routes and service methods.
 4. **Airflow tasks must be idempotent.** Re-running a task should not create duplicate data.
 5. **All API clients must handle failures gracefully.** Return None on failure, log the error, let the pipeline continue with partial data.
 6. **Use XCom for passing data between Airflow tasks.** Keep payloads small (IDs and scores, not full API responses).
 7. **Store raw API responses in a separate table** for debugging, but work with normalized data in the main hypertables.
-8. **Bilingual support:** All user-facing text (including AI recommendations) should respect the user's language preference (EN/PT).
-9. **Cost-conscious scanning:** Never call Duffel or Seats.aero on a schedule. Only on-demand when a deal is detected or user requests a live scan.
+8. **Trilingual support: EN/ES/PT.** Use i18n — do not hardcode English strings in components. All user-facing text (including AI recommendations) respects the user's language preference.
+9. **Cost-conscious scanning:** Duffel and Seats.aero run once daily at 7 AM + on "Scan Now". SerpApi is the only scheduled scanner.
 10. **Docker-first:** Everything runs in Docker. No local Python installs needed on the server.
+11. **Route-centric architecture.** No standalone feature pages. Everything accessed through a route.
+12. **Airport comparison is NEVER a separate page.** Embedded in Level 3 Ticket Detail panel.
+13. **Alert settings are NEVER a separate page.** Merged into Settings. Route overrides on Route Detail.
+14. **Every scan cycle generates events.** Write to route_events for significant changes. Max 1 "stable" event per day for no-change scans.
+15. **Grafana is internal only.** Users never see it. All user-facing charts use Recharts.
+16. **Never overwrite changes from other sessions.** Always read the current state of a file before editing. If a file has changed since your last read, re-read it first. Do not assume prior generated content is still present.

@@ -1,14 +1,14 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import desc, select
-from sqlalchemy.orm import aliased
+from sqlalchemy import desc, select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.deal import DealAnalysis
+from app.models.prices import FlightOffer, DuffelPrice, AwardPrice
 from app.models.user import User
 
 router = APIRouter()
@@ -52,9 +52,50 @@ class DealResponse(BaseModel):
     best_cpp: float | None
     ai_recommendation_en: str | None
     ai_recommendation_pt: str | None
-    price_prev_usd: float | None = None   # previous scan price for same combo
+    price_prev_usd: float | None = None
 
     model_config = {"from_attributes": True}
+
+
+class FlightOfferResponse(BaseModel):
+    id: uuid.UUID
+    price_usd: float
+    primary_airline: str | None
+    airline_codes: list[str]
+    stops: int
+    duration_minutes: int | None
+    is_direct: bool
+
+    model_config = {"from_attributes": True}
+
+
+class DuffelEnrichment(BaseModel):
+    price_usd: float
+    fare_brand_name: str | None
+    is_refundable: bool | None
+    change_fee_usd: float | None
+    baggage_included: bool
+    expires_at: datetime | None
+    airline_codes: list[str]
+    scanned_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AwardOption(BaseModel):
+    loyalty_program: str
+    miles_cost: int
+    cash_taxes_usd: float
+    seats_available: int
+    cpp_value: float | None
+    operating_airline: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class EnrichmentResponse(BaseModel):
+    duffel: DuffelEnrichment | None
+    awards: list[AwardOption]
 
 
 @router.get("/", response_model=list[DealResponse])
@@ -68,13 +109,36 @@ async def list_deals(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns scored deals. Supports route_id filter and includes price_prev_usd for delta display."""
-    # Subquery: previous price for same (route, origin, dest, cabin, date)
+    """
+    Returns the latest scored deal per unique (origin, destination, cabin_class, departure_date).
+    No duplicates — one card per unique flight combo, always the most recent scan.
+    Includes price_prev_usd for delta display ("↓ $200 vs last scan").
+    """
+    # ── Subquery: latest scan time per (origin, dest, cabin, departure_date) ──
+    latest_sq = (
+        select(
+            DealAnalysis.origin,
+            DealAnalysis.destination,
+            DealAnalysis.cabin_class,
+            DealAnalysis.departure_date,
+            func.max(DealAnalysis.time).label("latest_time"),
+        )
+        .where(DealAnalysis.score_total >= min_score)
+        .group_by(
+            DealAnalysis.origin,
+            DealAnalysis.destination,
+            DealAnalysis.cabin_class,
+            DealAnalysis.departure_date,
+        )
+        .subquery()
+    )
+
+    # ── Subquery: previous price for delta display ─────────────────────────────
+    from sqlalchemy.orm import aliased
     prev = aliased(DealAnalysis, flat=True)
     prev_price_sq = (
         select(prev.best_price_usd)
         .where(
-            prev.route_id == DealAnalysis.route_id,
             prev.origin == DealAnalysis.origin,
             prev.destination == DealAnalysis.destination,
             prev.cabin_class == DealAnalysis.cabin_class,
@@ -87,12 +151,23 @@ async def list_deals(
         .scalar_subquery()
     )
 
+    # ── Main query: join to get the full latest row per combo ─────────────────
     stmt = (
         select(DealAnalysis, prev_price_sq.label("price_prev_usd"))
-        .where(DealAnalysis.score_total >= min_score)
-        .order_by(desc(DealAnalysis.time))
+        .join(
+            latest_sq,
+            and_(
+                DealAnalysis.origin == latest_sq.c.origin,
+                DealAnalysis.destination == latest_sq.c.destination,
+                DealAnalysis.cabin_class == latest_sq.c.cabin_class,
+                DealAnalysis.departure_date == latest_sq.c.departure_date,
+                DealAnalysis.time == latest_sq.c.latest_time,
+            ),
+        )
+        .order_by(desc(DealAnalysis.score_total))
         .limit(limit)
     )
+
     if cabin_class:
         stmt = stmt.where(DealAnalysis.cabin_class == cabin_class)
     if action:
@@ -123,3 +198,101 @@ async def get_deal(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Deal not found")
     return deal
+
+
+@router.get("/{deal_id}/offers", response_model=list[FlightOfferResponse])
+async def get_deal_offers(
+    deal_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the individual flight offers linked to this deal (by airline + stops).
+    Sorted by price ascending. Powers the "Flight Options" breakdown in the modal.
+    """
+    result = await db.execute(
+        select(FlightOffer)
+        .where(FlightOffer.deal_analysis_id == deal_id)
+        .order_by(FlightOffer.price_usd.asc())
+    )
+    return result.scalars().all()
+
+
+@router.get("/{deal_id}/enrichment", response_model=EnrichmentResponse)
+async def get_deal_enrichment(
+    deal_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the most recent Duffel (direct airline price) and Seats.aero (award)
+    data for this deal's route combo. Used to populate the Price Sources panel.
+    Looks back up to 48h to find the latest enrichment scan.
+    """
+    deal_result = await db.execute(
+        select(DealAnalysis).where(DealAnalysis.id == deal_id)
+    )
+    deal = deal_result.scalar_one_or_none()
+    if not deal:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+
+    # Latest Duffel price for this route combo
+    duffel_result = await db.execute(
+        select(DuffelPrice)
+        .where(
+            DuffelPrice.origin == deal.origin,
+            DuffelPrice.destination == deal.destination,
+            DuffelPrice.cabin_class == deal.cabin_class,
+            DuffelPrice.departure_date == deal.departure_date,
+            DuffelPrice.time >= cutoff,
+        )
+        .order_by(desc(DuffelPrice.time))
+        .limit(1)
+    )
+    duffel = duffel_result.scalar_one_or_none()
+
+    # Award options for this route combo (up to 5 best)
+    awards_result = await db.execute(
+        select(AwardPrice)
+        .where(
+            AwardPrice.origin == deal.origin,
+            AwardPrice.destination == deal.destination,
+            AwardPrice.cabin_class == deal.cabin_class,
+            AwardPrice.departure_date == deal.departure_date,
+            AwardPrice.time >= cutoff,
+        )
+        .order_by(AwardPrice.miles_cost.asc())
+        .limit(5)
+    )
+    awards = awards_result.scalars().all()
+
+    duffel_resp = None
+    if duffel:
+        duffel_resp = DuffelEnrichment(
+            price_usd=duffel.price_usd,
+            fare_brand_name=duffel.fare_brand_name,
+            is_refundable=duffel.is_refundable,
+            change_fee_usd=duffel.change_fee_usd,
+            baggage_included=duffel.baggage_included,
+            expires_at=duffel.expires_at,
+            airline_codes=duffel.airline_codes,
+            scanned_at=duffel.time,
+        )
+
+    return EnrichmentResponse(
+        duffel=duffel_resp,
+        awards=[
+            AwardOption(
+                loyalty_program=a.loyalty_program,
+                miles_cost=a.miles_cost,
+                cash_taxes_usd=a.cash_taxes_usd,
+                seats_available=a.seats_available,
+                cpp_value=a.cpp_value,
+                operating_airline=a.operating_airline,
+            )
+            for a in awards
+        ],
+    )

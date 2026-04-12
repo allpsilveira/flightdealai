@@ -10,12 +10,13 @@ const CABIN_LABEL = {
 };
 const AIRLINE_NAME = {
   AA: "American Airlines", UA: "United Airlines", DL: "Delta Air Lines",
-  LA: "LATAM Airlines", QR: "Qatar Airways", EK: "Emirates",
-  LH: "Lufthansa", BA: "British Airways", AF: "Air France",
-  SQ: "Singapore Airlines", CX: "Cathay Pacific", NH: "ANA",
-  JL: "JAL", TK: "Turkish Airlines", AZ: "ITA Airways",
-  G3: "GOL", AD: "Azul", JJ: "TAM",
+  LA: "LATAM Airlines",    QR: "Qatar Airways",   EK: "Emirates",
+  LH: "Lufthansa",         BA: "British Airways", AF: "Air France",
+  SQ: "Singapore Airlines",CX: "Cathay Pacific",  NH: "ANA",
+  JL: "JAL",               TK: "Turkish Airlines",AZ: "ITA Airways",
+  G3: "GOL",               AD: "Azul",            JJ: "TAM",
 };
+
 const CABIN_BY_AIRLINE = cabinQuality.reduce((acc, e) => {
   if (!acc[e.airline_code]) acc[e.airline_code] = e;
   return acc;
@@ -30,6 +31,11 @@ const fmtMins = (mins) => {
   const m = mins % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
+
+const StopLabel = ({ stops }) =>
+  stops === 0
+    ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">Direct</span>
+    : <span>{stops} stop{stops > 1 ? "s" : ""}</span>;
 
 const ScoreRow = ({ label, value, max }) => {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;
@@ -46,16 +52,11 @@ const ScoreRow = ({ label, value, max }) => {
   );
 };
 
-const StopLabel = ({ stops }) => {
-  if (stops === 0) return <span className="text-emerald-600 dark:text-emerald-400 font-medium">Direct</span>;
-  return <span>{stops} stop{stops > 1 ? "s" : ""}</span>;
-};
-
-export default function DealDetail({ deal, onClose }) {
-  const [offers, setOffers]           = useState(null);
-  const [enrichment, setEnrichment]   = useState(null);
-  const [loadingOffers, setLoadingOffers]       = useState(true);
-  const [loadingEnrich, setLoadingEnrich]       = useState(true);
+export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) {
+  const [offers,       setOffers]       = useState(null);
+  const [enrichment,   setEnrichment]   = useState(null);
+  const [loadingOffers, setLoadingOffers] = useState(true);
+  const [loadingEnrich, setLoadingEnrich] = useState(true);
 
   // Close on Escape
   useEffect(() => {
@@ -64,122 +65,118 @@ export default function DealDetail({ deal, onClose }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Fetch offers + enrichment when modal opens
   useEffect(() => {
+    if (!deal) return;
     let cancelled = false;
 
     api.get(`/deals/${deal.id}/offers`)
-      .then(r => { if (!cancelled) setOffers(r.data); })
+      .then((r) => { if (!cancelled) setOffers(r.data); })
       .catch(() => { if (!cancelled) setOffers([]); })
       .finally(() => { if (!cancelled) setLoadingOffers(false); });
 
     api.get(`/deals/${deal.id}/enrichment`)
-      .then(r => { if (!cancelled) setEnrichment(r.data); })
+      .then((r) => { if (!cancelled) setEnrichment(r.data); })
       .catch(() => { if (!cancelled) setEnrichment({ duffel: null, awards: [] }); })
       .finally(() => { if (!cancelled) setLoadingEnrich(false); });
 
     return () => { cancelled = true; };
-  }, [deal.id]);
+  }, [deal?.id]);
 
-  const cabin  = CABIN_BY_AIRLINE[deal.airline_code] ?? null;
-  const lounge = loungeAccess[deal.airline_code] ?? null;
-  const xfers  = transferPartners[deal.best_award_program] ?? [];
-  const rec    = deal.ai_recommendation_en;
+  if (!deal) return null;
+
+  const cabin      = CABIN_BY_AIRLINE[deal.airline_code] ?? null;
+  const lounge     = loungeAccess[deal.airline_code] ?? null;
+  const xfers      = transferPartners[deal.best_award_program] ?? [];
+  const rec        = deal.ai_recommendation_en;
+  const coldStart  = deal.percentile_position == null && deal.zscore == null;
+  const displayScore = Math.round((deal.score_total / 170) * 100);
 
   const typicalMid = deal.typical_price_low && deal.typical_price_high
     ? (deal.typical_price_low + deal.typical_price_high) / 2 : null;
   const savings    = typicalMid ? Math.round(typicalMid - deal.best_price_usd) : null;
   const savingsPct = typicalMid && savings > 0 ? Math.round((savings / typicalMid) * 100) : null;
-  const coldStart  = deal.percentile_position == null && deal.zscore == null;
-
-  // Normalize score to 0-100
-  const displayScore = Math.round((deal.score_total / 170) * 100);
 
   const scoreRows = [
-    { label: "Percentile (18)",      value: Math.round((deal.score_percentile / 30) * 18),      max: 18 },
-    { label: "Z-score (12)",         value: Math.round((deal.score_zscore / 20) * 12),           max: 12 },
-    { label: "Trend align (9)",      value: Math.round((deal.score_trend_alignment / 15) * 9),   max: 9  },
-    { label: "Trend direction (6)",  value: Math.round((deal.score_trend_direction / 10) * 6),   max: 6  },
-    { label: "Cross-source (12)",    value: Math.round((deal.score_cross_source / 20) * 12),     max: 12 },
-    { label: "Arbitrage (6)",        value: Math.round((deal.score_arbitrage / 10) * 6),         max: 6  },
-    { label: "Fare brand (6)",       value: Math.round((deal.score_fare_brand / 10) * 6),        max: 6  },
-    { label: "Scarcity (3)",         value: Math.round((deal.score_scarcity / 5) * 3),           max: 3  },
-    { label: "Award bonus (28)",     value: Math.round((deal.score_award / 50) * 28),            max: 28 },
+    { label: "Percentile (18)",     value: Math.round((deal.score_percentile / 30) * 18),     max: 18 },
+    { label: "Z-score (12)",        value: Math.round((deal.score_zscore / 20) * 12),          max: 12 },
+    { label: "Trend align (9)",     value: Math.round((deal.score_trend_alignment / 15) * 9),  max: 9  },
+    { label: "Trend direction (6)", value: Math.round((deal.score_trend_direction / 10) * 6),  max: 6  },
+    { label: "Cross-source (12)",   value: Math.round((deal.score_cross_source / 20) * 12),    max: 12 },
+    { label: "Arbitrage (6)",       value: Math.round((deal.score_arbitrage / 10) * 6),        max: 6  },
+    { label: "Fare brand (6)",      value: Math.round((deal.score_fare_brand / 10) * 6),       max: 6  },
+    { label: "Scarcity (3)",        value: Math.round((deal.score_scarcity / 5) * 3),          max: 3  },
+    { label: "Award bonus (28)",    value: Math.round((deal.score_award / 50) * 28),           max: 28 },
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center
-                 bg-black/50 dark:bg-black/70 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <>
+      {/* Backdrop */}
       <div
-        className="relative w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto
-                   bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-2xl shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Drag handle (mobile) */}
-        <div className="flex justify-center pt-3 pb-1 sm:hidden">
-          <div className="w-10 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700" />
-        </div>
+        className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-        {/* Close (desktop) */}
-        <button
-          onClick={onClose}
-          className="hidden sm:flex absolute top-4 right-4 w-8 h-8 items-center justify-center
-                     rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400
-                     hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors z-10"
-        >
-          ✕
-        </button>
-
-        {/* GEM banner */}
-        {deal.is_gem && (
-          <div className="bg-brand-500 px-6 py-3 rounded-t-2xl">
-            <p className="text-sm font-bold text-white">✦ GEM DEAL — Not listed on Google Flights</p>
-          </div>
-        )}
-
-        <div className="p-5 sm:p-6 space-y-5">
-
-          {/* ── Header ──────────────────────────────────────────────────── */}
-          <div className="flex items-start gap-4">
+      {/* Slide-in panel from right */}
+      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md
+                      bg-white dark:bg-zinc-900 shadow-2xl overflow-y-auto
+                      animate-slide-right">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800
+                        px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             {deal.airline_code && (
               <img
                 src={airlineLogo(deal.airline_code)}
                 alt={deal.airline_code}
-                className="w-12 h-12 rounded-xl object-contain bg-zinc-50 dark:bg-zinc-800
-                           border border-zinc-100 dark:border-zinc-700 p-1.5 flex-shrink-0"
-                onError={e => { e.currentTarget.style.display = "none"; }}
+                className="w-9 h-9 rounded-lg object-contain bg-zinc-50 dark:bg-zinc-800
+                           border border-zinc-100 dark:border-zinc-700 p-1 flex-shrink-0"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
             )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-xl font-bold text-zinc-900 dark:text-white">
-                <span>{deal.origin}</span>
-                <svg className="w-4 h-4 text-zinc-400 flex-shrink-0" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M2 7h10M8 3l4 4-4 4"/>
-                </svg>
-                <span>{deal.destination}</span>
-              </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <div>
+              <p className="text-base font-bold text-zinc-900 dark:text-white">
+                {deal.origin} → {deal.destination}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {AIRLINE_NAME[deal.airline_code] ?? deal.airline_code}
                 {" · "}{CABIN_LABEL[deal.cabin_class] ?? deal.cabin_class}
-                {deal.is_direct ? " · Direct" : " · Connecting"}
-                {deal.departure_date && (
-                  <>{" · "}{format(new Date(deal.departure_date), "EEE d MMM yyyy")}</>
-                )}
               </p>
             </div>
-            <div className="text-right flex-shrink-0">
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full
+                       bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400
+                       hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+
+          {/* Price + date */}
+          <div className="flex items-center justify-between">
+            <div>
               <p className="text-3xl font-bold text-zinc-900 dark:text-white tabular-nums">
                 ${deal.best_price_usd?.toLocaleString()}
               </p>
-              <p className="text-xs text-zinc-400 mt-0.5">per person</p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {deal.departure_date
+                  ? format(new Date(deal.departure_date), "EEE d MMM yyyy")
+                  : ""}
+                {deal.is_direct ? " · Direct" : " · Connecting"}
+              </p>
             </div>
+            {deal.is_gem && (
+              <div className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-bold">
+                ✦ GEM
+              </div>
+            )}
           </div>
 
-          {/* ── Savings vs Google typical ────────────────────────────────── */}
-          {(savings != null && savings > 0) ? (
+          {/* Savings vs Google */}
+          {savings != null && savings > 0 ? (
             <div className="px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10
                             border border-emerald-200 dark:border-emerald-500/20">
               <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
@@ -187,27 +184,24 @@ export default function DealDetail({ deal, onClose }) {
               </p>
               <p className="text-xs text-emerald-600/70 dark:text-emerald-400/60 mt-0.5">
                 Typical: ${deal.typical_price_low?.toLocaleString()} – ${deal.typical_price_high?.toLocaleString()}
-                {deal.google_price_level && (
-                  <span className="ml-2 font-semibold uppercase">[Google: {deal.google_price_level}]</span>
-                )}
               </p>
             </div>
           ) : coldStart ? (
             <div className="px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Building price baseline — comparisons will appear after a few scans
+                Building price baseline — comparisons appear after a few scans
               </p>
             </div>
           ) : null}
 
-          {/* ── Price Sources ────────────────────────────────────────────── */}
+          {/* Price Sources */}
           <div>
             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
               Price Sources
             </p>
-            <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-700/60">
-
-              {/* Google Flights (SerpApi) */}
+            <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
+                            divide-y divide-zinc-100 dark:divide-zinc-700/60">
+              {/* Google Flights */}
               <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
                 <div>
                   <p className="text-xs font-semibold text-zinc-900 dark:text-white">Google Flights</p>
@@ -218,19 +212,20 @@ export default function DealDetail({ deal, onClose }) {
                     ${deal.best_price_usd?.toLocaleString()}
                   </p>
                   {deal.google_price_level && (
-                    <span className={`text-2xs font-bold uppercase px-1.5 py-0.5 rounded
-                      ${deal.google_price_level === "low"
+                    <span className={`text-2xs font-bold uppercase px-1.5 py-0.5 rounded ${
+                      deal.google_price_level === "low"
                         ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
                         : deal.google_price_level === "high"
-                          ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
-                          : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500"}`}>
+                        ? "bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400"
+                        : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500"
+                    }`}>
                       {deal.google_price_level}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Duffel (direct airline) */}
+              {/* Duffel */}
               <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
                 <div>
                   <p className="text-xs font-semibold text-zinc-900 dark:text-white">Direct via Airline</p>
@@ -265,7 +260,7 @@ export default function DealDetail({ deal, onClose }) {
                 </div>
               </div>
 
-              {/* Best award option */}
+              {/* Award */}
               <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
                 <div>
                   <p className="text-xs font-semibold text-zinc-900 dark:text-white">Best Award</p>
@@ -275,9 +270,13 @@ export default function DealDetail({ deal, onClose }) {
                     <p className="text-2xs text-zinc-400 mt-0.5">
                       via {enrichment.awards[0].loyalty_program}
                       {enrichment.awards[0].seats_available <= 3 && (
-                        <span className="text-amber-500 ml-1">· {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} left</span>
+                        <span className="text-amber-500 ml-1">
+                          · {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} left
+                        </span>
                       )}
-                      {xfers.length > 0 && <span className="ml-1">· Transfer: {xfers.slice(0,2).join(", ")}</span>}
+                      {xfers.length > 0 && (
+                        <span className="ml-1">· Transfer: {xfers.slice(0, 2).join(", ")}</span>
+                      )}
                     </p>
                   ) : (
                     <p className="text-2xs text-zinc-400 mt-0.5">Run "Scan Now" to load</p>
@@ -290,10 +289,9 @@ export default function DealDetail({ deal, onClose }) {
                         {enrichment.awards[0].miles_cost.toLocaleString()} pts
                       </p>
                       {enrichment.awards[0].cpp_value && (
-                        <p className="text-2xs text-brand-500">{enrichment.awards[0].cpp_value.toFixed(1)}¢/pt</p>
-                      )}
-                      {enrichment.awards[0].cash_taxes_usd > 0 && (
-                        <p className="text-2xs text-zinc-400">+${enrichment.awards[0].cash_taxes_usd} taxes</p>
+                        <p className="text-2xs text-brand-500">
+                          {enrichment.awards[0].cpp_value.toFixed(1)}¢/pt
+                        </p>
                       )}
                     </>
                   ) : (
@@ -302,25 +300,49 @@ export default function DealDetail({ deal, onClose }) {
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* All award options */}
-            {!loadingEnrich && enrichment?.awards?.length > 1 && (
-              <div className="mt-2 space-y-1">
-                {enrichment.awards.slice(1).map(a => (
-                  <div key={a.loyalty_program} className="flex items-center justify-between px-3 py-1.5 rounded-lg
-                                                           bg-zinc-50 dark:bg-zinc-800/40">
-                    <span className="text-2xs text-zinc-500 dark:text-zinc-400">{a.loyalty_program}</span>
-                    <span className="text-2xs font-medium text-zinc-700 dark:text-zinc-300 tabular-nums">
-                      {a.miles_cost.toLocaleString()} pts
-                      {a.cpp_value && <span className="text-brand-500 ml-1">{a.cpp_value.toFixed(1)}¢</span>}
-                    </span>
+          {/* Airport comparison (embedded) */}
+          {routeOrigins.length > 1 && (
+            <div>
+              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+                Airport Comparison
+              </p>
+              <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
+                              divide-y divide-zinc-100 dark:divide-zinc-700/60">
+                {routeOrigins.map((origin) => (
+                  <div
+                    key={origin}
+                    className={`flex items-center justify-between px-4 py-3 ${
+                      origin === deal.origin
+                        ? "bg-emerald-50 dark:bg-emerald-500/10"
+                        : "bg-zinc-50 dark:bg-zinc-800/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-white">{origin}</span>
+                      {origin === deal.origin && (
+                        <span className="text-2xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Best price ✓
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      {origin === deal.origin ? (
+                        <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                          ${deal.best_price_usd?.toLocaleString()}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500">Run scan to compare</p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* ── Flight Options breakdown ─────────────────────────────────── */}
+          {/* Flight Options */}
           <div>
             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
               Flight Options
@@ -328,12 +350,14 @@ export default function DealDetail({ deal, onClose }) {
             {loadingOffers ? (
               <div className="h-16 rounded-xl bg-zinc-50 dark:bg-zinc-800 animate-pulse" />
             ) : offers?.length > 0 ? (
-              <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden divide-y divide-zinc-100 dark:divide-zinc-700/60">
+              <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
+                              divide-y divide-zinc-100 dark:divide-zinc-700/60">
                 {offers.map((offer, i) => (
                   <div
                     key={offer.id}
-                    className={`flex items-center justify-between px-4 py-3
-                      ${i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"}`}
+                    className={`flex items-center justify-between px-4 py-3 ${
+                      i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"
+                    }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {offer.primary_airline && (
@@ -341,13 +365,13 @@ export default function DealDetail({ deal, onClose }) {
                           src={airlineLogo(offer.primary_airline)}
                           alt={offer.primary_airline}
                           className="w-6 h-6 rounded object-contain bg-white dark:bg-zinc-700 p-0.5 flex-shrink-0"
-                          onError={e => { e.currentTarget.style.display = "none"; }}
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       )}
                       <div>
                         <p className="text-xs font-medium text-zinc-900 dark:text-white flex items-center gap-1.5">
                           <StopLabel stops={offer.stops} />
-                          {offer.airline_codes.length > 1 && (
+                          {offer.airline_codes?.length > 1 && (
                             <span className="text-zinc-400">· {offer.airline_codes.join(" + ")}</span>
                           )}
                           {i === 0 && (
@@ -360,39 +384,19 @@ export default function DealDetail({ deal, onClose }) {
                       </div>
                     </div>
                     <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums flex-shrink-0">
-                      ${offer.price_usd.toLocaleString()}
+                      ${offer.price_usd?.toLocaleString()}
                     </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 italic px-1">
-                No offer breakdown available — will appear after next scan.
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                No offer breakdown yet — appears after next scan.
               </p>
             )}
           </div>
 
-          {/* ── Percentile + z-score ─────────────────────────────────────── */}
-          {!coldStart && (
-            <div className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-              {deal.percentile_position != null && (
-                <span>
-                  Bottom <span className="font-semibold text-zinc-900 dark:text-white">
-                    {Math.round(deal.percentile_position)}%
-                  </span> of 90-day prices
-                </span>
-              )}
-              {deal.zscore != null && deal.zscore > 0 && (
-                <span>
-                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">
-                    {deal.zscore.toFixed(1)}σ
-                  </span> below average
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* ── Cabin quality ────────────────────────────────────────────── */}
+          {/* Cabin quality */}
           {cabin && (
             <div>
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">Cabin</p>
@@ -407,13 +411,14 @@ export default function DealDetail({ deal, onClose }) {
                   </p>
                 </div>
                 <span className="text-2xl font-bold text-brand-500 tabular-nums">
-                  {cabin.quality_score}<span className="text-sm font-normal text-zinc-400">/100</span>
+                  {cabin.quality_score}
+                  <span className="text-sm font-normal text-zinc-400">/100</span>
                 </span>
               </div>
             </div>
           )}
 
-          {/* ── Lounge ───────────────────────────────────────────────────── */}
+          {/* Lounge */}
           {lounge && (deal.cabin_class === "BUSINESS" || deal.cabin_class === "FIRST") && (
             <div className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
               <svg className="w-4 h-4 text-brand-500 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
@@ -423,19 +428,20 @@ export default function DealDetail({ deal, onClose }) {
             </div>
           )}
 
-          {/* ── Score breakdown ──────────────────────────────────────────── */}
+          {/* Score breakdown */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
                 Score Breakdown
               </p>
               <span className="text-lg font-bold text-zinc-900 dark:text-white tabular-nums">
-                {displayScore}<span className="text-sm font-normal text-zinc-400">/100</span>
+                {displayScore}
+                <span className="text-sm font-normal text-zinc-400">/100</span>
               </span>
             </div>
             {coldStart && (
               <p className="text-xs text-zinc-400 italic mb-2">
-                Most scores require 30+ days of price history. Will improve automatically.
+                Most scores require 30+ days of price history.
               </p>
             )}
             <div className="space-y-2">
@@ -445,7 +451,7 @@ export default function DealDetail({ deal, onClose }) {
             </div>
           </div>
 
-          {/* ── AI recommendation ────────────────────────────────────────── */}
+          {/* AI recommendation */}
           {rec && (
             <div>
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
@@ -454,11 +460,8 @@ export default function DealDetail({ deal, onClose }) {
               <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">{rec}</p>
             </div>
           )}
-
-          {/* ── Close ────────────────────────────────────────────────────── */}
-          <button onClick={onClose} className="btn-ghost w-full mt-1">Close</button>
         </div>
       </div>
-    </div>
+    </>
   );
 }

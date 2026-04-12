@@ -4,12 +4,16 @@ Deal pipeline — orchestrates the full Phase 3 intelligence flow.
 For each (origin, destination, cabin, date) after a scan:
   1. Cross-reference available source results
   2. Pull rolling statistics from TimescaleDB
-  3. Score the deal (all 8 components)
-  4. If score >= 80 or GEM: enrich with Duffel + Seats.aero
+  3. Score the deal (all components)
+  4. If force_enrich=True: always enrich with Duffel + Seats.aero
+     (force_enrich=True on daily 7 AM enrichment scan and "Scan Now" button)
   5. Re-score with enrichment data
   6. Generate AI recommendation
   7. Store DealAnalysis row
-  8. Return scored deal for WebSocket broadcast
+  8. Store FlightOffer rows (linked to DealAnalysis via deal_analysis_id)
+  9. Return scored deal for WebSocket broadcast
+
+Enrichment is NOT score-gated. Score quality improves as historical data accumulates.
 """
 import uuid
 import structlog
@@ -25,12 +29,10 @@ from app.services.stats import get_daily_stats, get_price_slope_7d
 from app.services.scoring import score_deal
 from app.services.award_analyzer import enrich_awards, best_award_summary
 from app.services import duffel_client, seats_aero_client
-from app.services.ingestion import store_duffel_price, store_award_prices
+from app.services.ingestion import store_duffel_price, store_award_prices, store_flight_offers
 from app.services import claude_advisor
 
 logger = structlog.get_logger(__name__)
-
-ENRICH_THRESHOLD = 80.0   # score at which Duffel + Seats.aero fire
 
 
 async def run_pipeline(
@@ -42,10 +44,17 @@ async def run_pipeline(
     google_result: dict[str, Any] | None,
     db: AsyncSession,
     user_language: str = "en",
+    force_enrich: bool = False,
+    offers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """
     Full intelligence pipeline for one (origin, dest, cabin, date) combo.
-    Returns the final scored deal dict, or None if price < threshold to score.
+
+    force_enrich=True  → always call Duffel + Seats.aero (daily 7 AM / Scan Now)
+    force_enrich=False → SerpApi 4h quick scan, no enrichment
+    offers             → individual flight offers from SerpApi for this combo (stored as FlightOffers)
+
+    Returns the final scored deal dict, or None if no price found.
     """
     # ── Step 1: Cross-reference ────────────────────────────────────────────────
     xref = cross_reference(google_result=google_result)
@@ -59,7 +68,7 @@ async def run_pipeline(
     stats = await get_daily_stats(db, route_id, origin, destination, cabin_class)
     slope = await get_price_slope_7d(db, route_id, origin, destination, cabin_class)
 
-    # ── Step 3: First-pass score (no enrichment yet) ───────────────────────────
+    # ── Step 3: First-pass score ───────────────────────────────────────────────
     first_score = score_deal(
         xref=xref,
         google_result=google_result,
@@ -69,16 +78,14 @@ async def run_pipeline(
         extra={"price_slope_7d": slope},
     )
 
-    # ── Step 4: Enrichment (Duffel + Seats.aero) on high scores ───────────────
+    # ── Step 4: Enrichment (Duffel + Seats.aero) ─────────────────────────────
     duffel_result = None
-    award_results = None
-    enriched_awards = []
+    enriched_awards: list = []
 
-    if first_score["score_total"] >= ENRICH_THRESHOLD or first_score["is_gem"]:
-        logger.info("pipeline_enriching", score=first_score["score_total"],
-                    origin=origin, destination=destination)
+    if force_enrich:
+        logger.info("pipeline_enriching", force=True,
+                    origin=origin, destination=destination, cabin=cabin_class)
 
-        # Duffel: fare brand + conditions
         duffel_result = await duffel_client.enrich_offer(
             origin, destination, departure_date, cabin_class
         )
@@ -86,16 +93,14 @@ async def run_pipeline(
             await store_duffel_price(route_id, duffel_result, db)
             xref["sources_confirmed"].append("duffel")
 
-        # Seats.aero: award availability
         raw_awards = await seats_aero_client.search_award_availability(
             origin, destination, departure_date, cabin_class
         )
         if raw_awards:
             await store_award_prices(route_id, raw_awards, db)
             enriched_awards = enrich_awards(xref["best_price_usd"], raw_awards)
-            award_results = enriched_awards
 
-    # ── Step 5: Final score with enrichment ────────────────────────────────────
+    # ── Step 5: Final score with enrichment data ───────────────────────────────
     final_score = score_deal(
         xref=xref,
         google_result=google_result,
@@ -105,7 +110,7 @@ async def run_pipeline(
         extra={"price_slope_7d": slope},
     )
 
-    # ── Step 6: AI recommendation ──────────────────────────────────────────────
+    # ── Step 6: AI recommendation (BUY/STRONG_BUY/GEM only) ──────────────────
     deal_context = {**final_score, **xref,
                     "origin": origin, "destination": destination,
                     "cabin_class": cabin_class, "departure_date": str(departure_date)}
@@ -120,9 +125,10 @@ async def run_pipeline(
 
     # ── Step 8: Store DealAnalysis ────────────────────────────────────────────
     now = datetime.now(timezone.utc)
+    deal_id = uuid.uuid4()
     row = {
         "time":              now,
-        "id":                uuid.uuid4(),
+        "id":                deal_id,
         "route_id":          route_id,
         "origin":            origin,
         "destination":       destination,
@@ -146,14 +152,19 @@ async def run_pipeline(
     await db.execute(stmt)
     await db.commit()
 
+    # ── Step 9: Store FlightOffers (linked to this DealAnalysis) ─────────────
+    if offers:
+        await store_flight_offers(route_id, offers, deal_id, db)
+
     logger.info(
         "pipeline_complete",
         origin=origin, destination=destination, cabin=cabin_class,
         price=xref["best_price_usd"], score=final_score["score_total"],
-        action=final_score["action"],
+        action=final_score["action"], enriched=force_enrich,
+        offers_stored=len(offers) if offers else 0,
     )
 
-    return row
+    return {**row, "id": str(deal_id)}
 
 
 async def run_pipeline_batch(
@@ -161,13 +172,21 @@ async def run_pipeline_batch(
     scan_results: dict[str, Any],
     db: AsyncSession,
     user_language: str = "en",
+    force_enrich: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Runs the pipeline for all (origin, dest, cabin, date) combos from a scan result.
     Returns list of scored deals.
+
+    scan_results["all_offers"] is a string-keyed dict: "origin|dest|cabin|date" → [offers]
     """
+    all_offers_map: dict[str, list] = scan_results.get("all_offers", {})
     deals = []
+
     for best in scan_results.get("best_prices", []):
+        combo_key = f"{best['origin']}|{best['destination']}|{best['cabin_class']}|{best['departure_date']}"
+        offers = all_offers_map.get(combo_key, [])
+
         result = await run_pipeline(
             route_id=route_id,
             origin=best["origin"],
@@ -185,6 +204,8 @@ async def run_pipeline_batch(
             },
             db=db,
             user_language=user_language,
+            force_enrich=force_enrich,
+            offers=offers,
         )
         if result:
             deals.append(result)

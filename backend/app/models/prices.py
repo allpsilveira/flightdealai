@@ -1,6 +1,15 @@
 """
-TimescaleDB hypertable models for raw price data from all 5 sources.
-The `time` column is always the first column — required for hypertable creation.
+TimescaleDB hypertable models for raw price data.
+
+Active sources:
+  GooglePrice   — SerpApi best price per scan
+  FlightOffer   — all individual offers from SerpApi (per airline+stops), linked to DealAnalysis
+  DuffelPrice   — direct airline cash price + fare conditions (daily enrichment)
+  AwardPrice    — award availability from Seats.aero (daily enrichment)
+
+Dead tables (do not write to — kept for historical data):
+  AmadeusPrice  — decommissioned July 2026
+  KiwiPrice     — decommissioned July 2026
 """
 import uuid
 from datetime import date, datetime
@@ -11,29 +20,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
-class AmadeusPrice(Base):
-    """Raw price data from Amadeus Self-Service API (Tier 1 tripwire)."""
-    __tablename__ = "amadeus_prices"
-
-    time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    route_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    origin: Mapped[str] = mapped_column(String(3), nullable=False)
-    destination: Mapped[str] = mapped_column(String(3), nullable=False)
-    departure_date: Mapped[date] = mapped_column(Date, nullable=False)
-    cabin_class: Mapped[str] = mapped_column(String(20), nullable=False)
-    price_usd: Mapped[float] = mapped_column(Float, nullable=False)
-    seats_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    booking_class: Mapped[str | None] = mapped_column(String(5), nullable=True)
-    branded_fare: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    airline_codes: Mapped[list[str]] = mapped_column(ARRAY(String(3)), nullable=False, default=list)
-    is_direct: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-
-
 class GooglePrice(Base):
-    """Price + trend data from SearchApi.io (Google Flights). Tier 2 deep scan."""
+    """Overall best price per scan from SerpApi (Google Flights). Primary stats source."""
     __tablename__ = "google_prices"
 
     time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
@@ -44,8 +32,7 @@ class GooglePrice(Base):
     departure_date: Mapped[date] = mapped_column(Date, nullable=False)
     cabin_class: Mapped[str] = mapped_column(String(20), nullable=False)
     price_usd: Mapped[float] = mapped_column(Float, nullable=False)
-    # Google price_insights fields
-    price_level: Mapped[str | None] = mapped_column(String(20), nullable=True)  # low/typical/high
+    price_level: Mapped[str | None] = mapped_column(String(20), nullable=True)   # low/typical/high
     typical_price_low: Mapped[float | None] = mapped_column(Float, nullable=True)
     typical_price_high: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_history: Mapped[list | None] = mapped_column(JSONB, nullable=True)
@@ -54,29 +41,32 @@ class GooglePrice(Base):
     raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
-class KiwiPrice(Base):
-    """Creative routing data from Kiwi Tequila (virtual interlining). Tier 1."""
-    __tablename__ = "kiwi_prices"
+class FlightOffer(Base):
+    """
+    Individual flight offers from SerpApi — cheapest per (primary_airline, stops) per scan.
+    Linked to the DealAnalysis row produced by the same scan via deal_analysis_id.
+    Powers the "Flight Options" breakdown in the deal detail modal.
+    """
+    __tablename__ = "flight_offers"
 
     time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    deal_analysis_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     route_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     origin: Mapped[str] = mapped_column(String(3), nullable=False)
     destination: Mapped[str] = mapped_column(String(3), nullable=False)
     departure_date: Mapped[date] = mapped_column(Date, nullable=False)
     cabin_class: Mapped[str] = mapped_column(String(20), nullable=False)
     price_usd: Mapped[float] = mapped_column(Float, nullable=False)
-    is_virtual_interlining: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    has_airport_change: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    technical_stops: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    deep_link: Mapped[str | None] = mapped_column(Text, nullable=True)
+    primary_airline: Mapped[str | None] = mapped_column(String(3), nullable=True)
     airline_codes: Mapped[list[str]] = mapped_column(ARRAY(String(3)), nullable=False, default=list)
+    stops: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    is_direct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class DuffelPrice(Base):
-    """Fare brand + conditions data from Duffel (on-demand enrichment). Tier 3."""
+    """Direct airline cash price + fare brand + conditions from Duffel. Daily enrichment."""
     __tablename__ = "duffel_prices"
 
     time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
@@ -99,7 +89,7 @@ class DuffelPrice(Base):
 
 
 class AwardPrice(Base):
-    """Award/miles availability from Seats.aero (on-demand). Tier 3."""
+    """Award/miles availability from Seats.aero. Daily enrichment."""
     __tablename__ = "award_prices"
 
     time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, primary_key=True)
@@ -114,6 +104,5 @@ class AwardPrice(Base):
     cash_taxes_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     seats_available: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     operating_airline: Mapped[str | None] = mapped_column(String(3), nullable=True)
-    # Computed at ingestion time based on companion cash price
     cpp_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

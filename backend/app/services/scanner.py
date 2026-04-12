@@ -3,8 +3,12 @@ Scanner — main scan pipeline.
 
 Sources:
   SerpApi (Google Flights) — scheduled every 4h (quick) and 3x/day (full)
-  Duffel                   — on-demand when score >= 80 (see api/scan.py)
-  Seats.aero               — on-demand when score >= 80 (see api/scan.py)
+  Duffel + Seats.aero      — daily enrichment at 7 AM and on-demand "Scan Now"
+                             (handled by deal_pipeline, not here)
+
+Per scan, SerpApi returns:
+  - best overall price → stored to GooglePrice table
+  - all offers by (airline, stops) → returned in all_offers for pipeline to store as FlightOffers
 """
 import asyncio
 import structlog
@@ -34,10 +38,13 @@ async def scan_route(
 ) -> dict[str, Any]:
     """
     Scan a route via SerpApi (Google Flights).
-    deep=True → full scan: price + trends + price_level + price_history (3x/day)
-    deep=False → quick price check only, no history (every 4h tripwire)
+    deep=True → full scan with price_level + price_history (3x/day)
+    deep=False → quick price check only (every 4h tripwire)
 
-    Stores results to TimescaleDB and returns a scan summary.
+    Returns:
+      best_prices: list of cheapest overall per (origin, dest, cabin, date)
+      all_offers:  dict keyed by (origin, dest, cabin, date_str) →
+                   list of individual offers per airline+stops
     """
     scan_dates = _date_range(date_from, date_to, max_dates=5)
 
@@ -50,9 +57,9 @@ async def scan_route(
         "scan_type":     "full" if deep else "quick",
         "sources":       {"serpapi": 0},
         "best_prices":   [],
+        "all_offers":    {},   # keyed by (origin, dest, cabin, date_str)
     }
 
-    # Build tasks: one SerpApi call per (origin × dest × cabin × date)
     tasks = [
         _run_serpapi(
             route_id, origin, dest, dep_date, cabin, db,
@@ -69,15 +76,27 @@ async def scan_route(
     task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
     google_prices: list[dict] = []
+    all_offers: dict[tuple, list[dict]] = {}
+
     for res in task_results:
         if isinstance(res, Exception):
             logger.warning("scan_task_error", error=str(res))
             continue
-        if res and res.get("price"):
-            google_prices.append(res["price"])
+        if not res:
+            continue
+        price = res.get("price")
+        if price and price.get("price_usd", 0) > 0:
+            google_prices.append(price)
+            key = (price["origin"], price["destination"], price["cabin_class"], str(price["departure_date"]))
+            all_offers[key] = price.get("offers", [])
 
     results["sources"]["serpapi"] = len(google_prices)
     results["best_prices"] = _compute_best_prices(google_prices)
+    # Serialise tuple keys to strings for JSON-safe passing to pipeline
+    results["all_offers"] = {
+        f"{o}|{d}|{c}|{dt}": offers
+        for (o, d, c, dt), offers in all_offers.items()
+    }
 
     logger.info(
         "scan_complete",
@@ -85,6 +104,7 @@ async def scan_route(
         type="full" if deep else "quick",
         prices_found=len(google_prices),
         best_count=len(results["best_prices"]),
+        offer_groups=sum(len(v) for v in all_offers.values()),
     )
     return results
 
@@ -102,16 +122,18 @@ async def _run_serpapi(
     trip_type: str = "ONE_WAY",
     return_date_offset_days: int | None = None,
 ) -> dict | None:
-    from datetime import timedelta
     return_date = (dep_date + timedelta(days=return_date_offset_days)) if (
         trip_type == "ROUND_TRIP" and return_date_offset_days
     ) else None
+
     price = await serpapi_client.search_flights(
         origin, dest, dep_date, cabin,
         deep=deep, trip_type=trip_type, return_date=return_date,
     )
     if price and price.get("price_usd", 0) > 0:
-        await store_google_price(route_id, price, db)
+        # Store best price without the offers list (not a GooglePrice column)
+        price_row = {k: v for k, v in price.items() if k != "offers"}
+        await store_google_price(route_id, price_row, db)
     return {"price": price}
 
 

@@ -1,8 +1,12 @@
 """
 SerpApi (Google Flights) client — primary price scanner.
+
+Every scan returns:
+  - The overall best price (for stats/scoring in GooglePrice table)
+  - A list of individual offers, one per (primary_airline, stops) group,
+    cheapest within each group (for FlightOffer table / deal detail breakdown)
+
 Runs every 4h for quick price checks and 3x/day for full trend scans.
-The only source for price_level (low/typical/high), typical_price_range,
-and timestamped price_history.
 """
 import structlog
 import httpx
@@ -24,6 +28,14 @@ CABIN_CODE = {
 }
 
 
+def _extract_iata(airline_logo_url: str) -> str | None:
+    """Extract IATA code from SerpApi airline_logo URL, e.g. '.../AA.png' → 'AA'."""
+    try:
+        return airline_logo_url.rstrip("/").split("/")[-1].split(".")[0].upper() or None
+    except Exception:
+        return None
+
+
 async def search_flights(
     origin: str,
     destination: str,
@@ -35,10 +47,13 @@ async def search_flights(
 ) -> dict[str, Any] | None:
     """
     Search Google Flights via SerpApi.
-    deep=True fetches price_history and price_level (full scan).
-    deep=False is a quick price check (same API cost, but we skip heavy parsing).
-    trip_type: "ONE_WAY" or "ROUND_TRIP" (requires return_date when round-trip).
-    Returns a normalized dict or None on failure.
+    deep=True fetches price_history and price_level (full scan, 3x/day).
+    deep=False is a quick price check (every 4h tripwire).
+
+    Returns a normalized dict with:
+      - best overall price fields (for GooglePrice storage + scoring)
+      - offers: list of {primary_airline, stops, price_usd, ...} (for FlightOffer storage)
+    Returns None on failure.
     """
     if not settings.serpapi_api_key:
         logger.warning("serpapi_no_key")
@@ -52,7 +67,7 @@ async def search_flights(
         "departure_id":   origin,
         "arrival_id":     destination,
         "outbound_date":  departure_date.isoformat(),
-        "type":           "1" if is_round_trip else "2",   # 1=round-trip, 2=one-way
+        "type":           "1" if is_round_trip else "2",
         "travel_class":   CABIN_CODE.get(cabin_class, "3"),
         "stops":          "2",
         "currency":       "USD",
@@ -88,23 +103,62 @@ def _normalize(
     insights = data.get("price_insights", {})
     typical  = insights.get("typical_price_range", [None, None])
 
-    # Best price = cheapest flight across best_flights + other_flights
+    # ── Parse every offer from best_flights + other_flights ───────────────────
+    raw_offers: list[dict] = []
+
+    for offer in data.get("best_flights", []) + data.get("other_flights", []):
+        price = offer.get("price")
+        if not price:
+            continue
+
+        flights = offer.get("flights", [])
+        stops = max(0, len(flights) - 1)
+
+        # Extract IATA codes for all airlines in this itinerary
+        airline_codes: list[str] = []
+        for f in flights:
+            logo = f.get("airline_logo", "")
+            iata = _extract_iata(logo)
+            if iata and iata not in airline_codes:
+                airline_codes.append(iata)
+
+        primary = airline_codes[0] if airline_codes else None
+        duration = offer.get("total_duration")
+
+        raw_offers.append({
+            "price_usd":       float(price),
+            "primary_airline": primary,
+            "airline_codes":   airline_codes,
+            "stops":           stops,
+            "duration_minutes": duration,
+            "is_direct":       stops == 0,
+            "origin":          origin,
+            "destination":     destination,
+            "departure_date":  departure_date,
+            "cabin_class":     cabin_class,
+        })
+
+    # ── Deduplicate: cheapest per (primary_airline, stops) group ──────────────
+    best_per_group: dict[tuple, dict] = {}
+    for o in raw_offers:
+        key = (o["primary_airline"], o["stops"])
+        if key not in best_per_group or o["price_usd"] < best_per_group[key]["price_usd"]:
+            best_per_group[key] = o
+    offers = sorted(best_per_group.values(), key=lambda x: x["price_usd"])
+
+    # ── Overall best (for GooglePrice row + scoring) ──────────────────────────
     best_price: float | None = None
     best_airlines: list[str] = []
     is_direct = False
 
-    for offer in data.get("best_flights", []) + data.get("other_flights", []):
-        price = offer.get("price")
-        if price and (best_price is None or price < best_price):
-            best_price = float(price)
-            flights = offer.get("flights", [])
-            best_airlines = list({
-                f.get("airline_logo", "").split("/")[-1].split(".")[0].upper()
-                for f in flights if f.get("airline")
-            })
-            is_direct = len(flights) == 1
+    if offers:
+        cheapest = offers[0]
+        best_price = cheapest["price_usd"]
+        best_airlines = cheapest["airline_codes"]
+        is_direct = cheapest["is_direct"]
 
     return {
+        # ── GooglePrice fields ────────────────────────────────────────────────
         "origin":             origin,
         "destination":        destination,
         "departure_date":     departure_date,
@@ -118,6 +172,8 @@ def _normalize(
         "is_direct":          is_direct,
         "trip_type":          trip_type,
         "raw_response":       data if deep else None,
+        # ── Individual offers (for FlightOffer table) ─────────────────────────
+        "offers":             offers,
     }
 
 
@@ -131,7 +187,6 @@ async def get_cheapest_dates(
     """
     Scans departure dates over the next `lookahead_days` days (sampled every
     `sample_every` days) and returns a list of {date, price_usd} sorted by price.
-    Replaces Amadeus cheapest-date endpoint.
     """
     import asyncio
     from datetime import timedelta

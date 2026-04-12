@@ -40,9 +40,10 @@ export default {
         "brand":      "0 4px 14px rgba(242,100,25,0.35)",
       },
       animation: {
-        "fade-in":  "fadeIn 0.3s ease-out",
-        "slide-up": "slideUp 0.25s ease-out",
-        "pulse-brand": "pulseBrand 2s ease-in-out infinite",
+        "fade-in":    "fadeIn 0.3s ease-out",
+        "slide-up":   "slideUp 0.25s ease-out",
+        "slide-right":"slideRight 0.3s ease-out",
+        "pulse-brand":"pulseBrand 2s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -52,6 +53,10 @@ export default {
         slideUp: {
           "0%":   { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        slideRight: {
+          "0%":   { opacity: "0", transform: "translateX(100%)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
         },
         pulseBrand: {
           "0%, 100%": { boxShadow: "0 0 0 0 rgba(242,100,25,0.3)" },

@@ -1,6 +1,9 @@
 """
-Ingestion service — persists normalized price data from all 5 sources to TimescaleDB hypertables.
+Ingestion service — persists normalized price data from all active sources to TimescaleDB.
 All functions are idempotent: duplicate rows are skipped via ON CONFLICT DO NOTHING.
+
+Active sources: SerpApi (GooglePrice + FlightOffer), Duffel (DuffelPrice), Seats.aero (AwardPrice)
+Dead sources (do not add): Amadeus, Kiwi
 """
 import uuid
 import structlog
@@ -10,7 +13,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
-from app.models.prices import AmadeusPrice, GooglePrice, KiwiPrice, DuffelPrice, AwardPrice
+from app.models.prices import GooglePrice, FlightOffer, DuffelPrice, AwardPrice
 
 logger = structlog.get_logger(__name__)
 
@@ -19,49 +22,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def store_amadeus_prices(
-    route_id: uuid.UUID,
-    records: list[dict[str, Any]],
-    db: AsyncSession,
-) -> int:
-    """Bulk-insert Amadeus normalized records. Returns count stored."""
-    if not records:
-        return 0
-
-    now = _now()
-    rows = []
-    for r in records:
-        rows.append({
-            "time":             now,
-            "id":               uuid.uuid4(),
-            "route_id":         route_id,
-            "origin":           r["origin"],
-            "destination":      r["destination"],
-            "departure_date":   r["departure_date"],
-            "cabin_class":      r["cabin_class"],
-            "price_usd":        r["price_usd"],
-            "seats_remaining":  r.get("seats_remaining"),
-            "booking_class":    r.get("booking_class"),
-            "branded_fare":     r.get("branded_fare"),
-            "airline_codes":    r.get("airline_codes", []),
-            "is_direct":        r.get("is_direct", False),
-            "duration_minutes": r.get("duration_minutes"),
-            "raw_response":     r.get("raw_response"),
-        })
-
-    stmt = insert(AmadeusPrice).values(rows).on_conflict_do_nothing()
-    await db.execute(stmt)
-    await db.commit()
-    logger.info("ingested_amadeus", route_id=str(route_id), count=len(rows))
-    return len(rows)
-
-
 async def store_google_price(
     route_id: uuid.UUID,
     record: dict[str, Any],
     db: AsyncSession,
 ) -> bool:
-    """Insert a single SearchApi/Google normalized record. Returns True on success."""
+    """Insert the overall best price from a SerpApi scan. Returns True on success."""
     if not record:
         return False
 
@@ -90,40 +56,46 @@ async def store_google_price(
     return True
 
 
-async def store_kiwi_prices(
+async def store_flight_offers(
     route_id: uuid.UUID,
-    records: list[dict[str, Any]],
+    offers: list[dict[str, Any]],
+    deal_analysis_id: uuid.UUID,
     db: AsyncSession,
 ) -> int:
-    """Bulk-insert Kiwi normalized records. Returns count stored."""
-    if not records:
+    """
+    Bulk-insert individual flight offers from SerpApi.
+    Each offer is the cheapest for a (primary_airline, stops) group.
+    Linked to the DealAnalysis row via deal_analysis_id.
+    Returns count stored.
+    """
+    if not offers:
         return 0
 
     now = _now()
     rows = []
-    for r in records:
+    for o in offers:
         rows.append({
-            "time":                   now,
-            "id":                     uuid.uuid4(),
-            "route_id":               route_id,
-            "origin":                 r["origin"],
-            "destination":            r["destination"],
-            "departure_date":         r["departure_date"],
-            "cabin_class":            r["cabin_class"],
-            "price_usd":              r["price_usd"],
-            "is_virtual_interlining": r.get("is_virtual_interlining", False),
-            "has_airport_change":     r.get("has_airport_change", False),
-            "technical_stops":        r.get("technical_stops", 0),
-            "deep_link":              r.get("deep_link"),
-            "airline_codes":          r.get("airline_codes", []),
-            "duration_minutes":       r.get("duration_minutes"),
-            "raw_response":           r.get("raw_response"),
+            "time":             now,
+            "id":               uuid.uuid4(),
+            "deal_analysis_id": deal_analysis_id,
+            "route_id":         route_id,
+            "origin":           o["origin"],
+            "destination":      o["destination"],
+            "departure_date":   o["departure_date"],
+            "cabin_class":      o["cabin_class"],
+            "price_usd":        o["price_usd"],
+            "primary_airline":  o.get("primary_airline"),
+            "airline_codes":    o.get("airline_codes", []),
+            "stops":            o.get("stops", 0),
+            "duration_minutes": o.get("duration_minutes"),
+            "is_direct":        o.get("is_direct", False),
         })
 
-    stmt = insert(KiwiPrice).values(rows).on_conflict_do_nothing()
+    stmt = insert(FlightOffer).values(rows).on_conflict_do_nothing()
     await db.execute(stmt)
     await db.commit()
-    logger.info("ingested_kiwi", route_id=str(route_id), count=len(rows))
+    logger.info("ingested_flight_offers", route_id=str(route_id),
+                deal_analysis_id=str(deal_analysis_id), count=len(rows))
     return len(rows)
 
 

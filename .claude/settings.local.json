@@ -22,7 +22,14 @@
       "Bash(grep -n \"await db.commit\\(\\)\" c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/services/*.py)",
       "Bash(grep -rn \"import.*from.*components\" c:/Users/caned/flightdeal-ai/flightdeal-ai/frontend/src/pages/*.jsx)",
       "Bash(sed -n '62,72p' c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/api/scan.py)",
-      "Bash(sed -n '23,32p' c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/services/scanner.py)"
+      "Bash(sed -n '23,32p' c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/services/scanner.py)",
+      "Bash(git add:*)",
+      "Bash(docker compose:*)",
+      "Bash(where docker:*)",
+      "Bash(powershell -Command \"Get-Command docker -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(powershell -Command \"Get-Command docker 2>&1\")",
+      "Bash(powershell -Command \"Test-Path 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe'\")",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Program Files\\\\Docker' -Recurse -Filter 'docker.exe' -ErrorAction SilentlyContinue | Select-Object FullName\")"
     ]
   }
 }

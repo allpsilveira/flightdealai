@@ -4,7 +4,7 @@ from app.models.alert_rule import AlertRule
 from app.models.cabin_quality import CabinQuality
 from app.models.transfer_partner import TransferPartner
 from app.models.program_baseline import ProgramBaseline
-from app.models.prices import AmadeusPrice, GooglePrice, KiwiPrice, DuffelPrice, AwardPrice
+from app.models.prices import GooglePrice, FlightOffer, DuffelPrice, AwardPrice
 from app.models.deal import DealAnalysis
 from app.models.scan_history import ScanHistory
 
@@ -15,9 +15,8 @@ __all__ = [
     "CabinQuality",
     "TransferPartner",
     "ProgramBaseline",
-    "AmadeusPrice",
     "GooglePrice",
-    "KiwiPrice",
+    "FlightOffer",
     "DuffelPrice",
     "AwardPrice",
     "DealAnalysis",
