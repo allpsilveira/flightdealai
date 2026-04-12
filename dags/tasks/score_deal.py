@@ -22,7 +22,7 @@ async def _async_run(route_id: str, cabin_class: str, context: dict) -> None:
 
     ti    = context["ti"]
     xref  = ti.xcom_pull(task_ids="cross_reference", key="xref_summary") or {}
-    google = ti.xcom_pull(task_ids="fetch_searchapi",  key="google_result")
+    google = ti.xcom_pull(task_ids="fetch_serpapi", key="google_result")
 
     if not xref.get("best_price_usd"):
         log.warning("score_deal: no price to score")

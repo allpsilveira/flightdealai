@@ -23,6 +23,57 @@ class PriceHistoryPoint(BaseModel):
     sample_count: int
 
 
+class AirportComparePoint(BaseModel):
+    origin: str
+    destination: str
+    cabin_class: str
+    current_price: float | None
+    avg_30d: float | None
+    avg_90d: float | None
+    min_90d: float | None
+    sample_count: int
+
+
+@router.get("/compare/{route_id}", response_model=list[AirportComparePoint])
+async def compare_airports(
+    route_id: uuid.UUID,
+    cabin_class: str = Query(...),
+    days: int = Query(default=90, le=365),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregates per-origin stats for a route — powers the Airport Comparison page."""
+    result = await db.execute(
+        text("""
+            SELECT
+                origin,
+                destination,
+                cabin_class,
+                AVG(avg_price) FILTER (WHERE bucket >= NOW() - INTERVAL '30 days') AS avg_30d,
+                AVG(avg_price) FILTER (WHERE bucket >= NOW() - INTERVAL '90 days') AS avg_90d,
+                MIN(min_price) FILTER (WHERE bucket >= NOW() - INTERVAL '90 days') AS min_90d,
+                (
+                    SELECT avg_price
+                    FROM price_daily_stats sub
+                    WHERE sub.route_id = pds.route_id
+                      AND sub.origin = pds.origin
+                      AND sub.destination = pds.destination
+                      AND sub.cabin_class = pds.cabin_class
+                    ORDER BY bucket DESC LIMIT 1
+                ) AS current_price,
+                COUNT(*) AS sample_count
+            FROM price_daily_stats pds
+            WHERE route_id = :route_id
+              AND cabin_class = :cabin_class
+              AND bucket >= NOW() - make_interval(days => :days)
+            GROUP BY route_id, origin, destination, cabin_class
+            ORDER BY avg_90d ASC NULLS LAST
+        """),
+        {"route_id": str(route_id), "cabin_class": cabin_class, "days": days},
+    )
+    return [dict(row._mapping) for row in result]
+
+
 @router.get("/history/{route_id}", response_model=list[PriceHistoryPoint])
 async def price_history(
     route_id: uuid.UUID,

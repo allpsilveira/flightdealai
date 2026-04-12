@@ -28,9 +28,9 @@ async def _async_run():
     from sqlalchemy import text
 
     views = [
-        "amadeus_price_hourly",
         "google_price_hourly",
-        "kiwi_price_hourly",
+        "duffel_price_hourly",
+        "award_price_hourly",
         "price_daily_stats",
     ]
 

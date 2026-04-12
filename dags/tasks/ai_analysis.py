@@ -25,7 +25,7 @@ async def _async_run(route_id: str, cabin_class: str, context: dict) -> None:
     score   = ti.xcom_pull(task_ids="score_deal", key="score_total") or 0
     action  = ti.xcom_pull(task_ids="score_deal", key="action") or "NORMAL"
     is_gem  = ti.xcom_pull(task_ids="score_deal", key="is_gem") or False
-    google  = ti.xcom_pull(task_ids="fetch_searchapi", key="google_result") or {}
+    google  = ti.xcom_pull(task_ids="fetch_serpapi", key="google_result") or {}
 
     deal_ctx = {
         "origin":          xref.get("origin"),

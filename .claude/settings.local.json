@@ -4,7 +4,14 @@
       "Bash(npm --version)",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "WebFetch(domain:support.travelpayouts.com)",
+      "WebFetch(domain:developers.seats.aero)",
+      "WebFetch(domain:duffel.com)",
+      "WebFetch(domain:serpapi.com)",
+      "WebSearch",
+      "WebFetch(domain:travelpayouts.github.io)",
+      "WebFetch(domain:docs.seats.aero)"
     ]
   }
 }

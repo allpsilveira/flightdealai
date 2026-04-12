@@ -12,15 +12,9 @@ def run(route_id: str, cabin_class: str, **context) -> None:
 
     ti = context["ti"]
 
-    amadeus_price = ti.xcom_pull(task_ids="fetch_amadeus",  key="amadeus_cheapest_price")
-    google_result = ti.xcom_pull(task_ids="fetch_searchapi", key="google_result")
-    kiwi_price    = ti.xcom_pull(task_ids="fetch_kiwi",     key="kiwi_cheapest_price")
+    google_result = ti.xcom_pull(task_ids="fetch_serpapi", key="google_result")
 
-    # Reconstruct minimal list shapes expected by cross_reference()
-    amadeus_results = [{"price_usd": amadeus_price}] if amadeus_price else None
-    kiwi_results    = [{"price_usd": kiwi_price}]    if kiwi_price    else None
-
-    summary = cross_reference(amadeus_results, google_result, kiwi_results)
+    summary = cross_reference(google_result, duffel_result=None, award_results=None)
 
     # Attach the best origin/dest from google_result if available
     if google_result:

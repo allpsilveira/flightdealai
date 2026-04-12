@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
 
+    # ── Web Push (VAPID) ──────────────────────────────────────────────────────
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_claim_email: str = ""
+
     # ── App ───────────────────────────────────────────────────────────────────
     app_domain: str = "localhost"
     debug: bool = False

@@ -110,3 +110,37 @@ def _normalize(
         "is_direct":          is_direct,
         "raw_response":       data if deep else None,
     }
+
+
+async def get_cheapest_dates(
+    origin: str,
+    destination: str,
+    cabin_class: str,
+    lookahead_days: int = 60,
+    sample_every: int = 7,
+) -> list[dict[str, Any]]:
+    """
+    Scans departure dates over the next `lookahead_days` days (sampled every
+    `sample_every` days) and returns a list of {date, price_usd} sorted by price.
+    Replaces Amadeus cheapest-date endpoint.
+    """
+    import asyncio
+    from datetime import timedelta
+
+    today = date.today()
+    scan_dates = [
+        today + timedelta(days=d)
+        for d in range(7, lookahead_days + 1, sample_every)
+    ]
+
+    async def _fetch(d: date) -> dict | None:
+        result = await search_flights(origin, destination, d, cabin_class, deep=False)
+        if result and result.get("price_usd"):
+            return {"date": d.isoformat(), "price_usd": result["price_usd"]}
+        return None
+
+    results = await asyncio.gather(*[_fetch(d) for d in scan_dates])
+    return sorted(
+        [r for r in results if r],
+        key=lambda x: x["price_usd"],
+    )

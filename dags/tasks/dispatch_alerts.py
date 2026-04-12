@@ -16,6 +16,7 @@ def run(route_id: str, cabin_class: str, **context) -> None:
 
 async def _async_run(route_id: str, cabin_class: str, context: dict) -> None:
     from app.services.whatsapp import send_deal_alert
+    from app.services.web_push import send_push_notification
     from app.database import AsyncSessionLocal
     from app.models.deal import DealAnalysis
     from app.models.alert_rule import AlertRule
@@ -79,6 +80,14 @@ async def _async_run(route_id: str, cabin_class: str, context: dict) -> None:
 
         if rule.whatsapp_enabled and user.whatsapp_number:
             await send_deal_alert(user.whatsapp_number, deal_dict, rec, language)
+
+        if rule.web_push_enabled and user.web_push_subscription:
+            import json
+            try:
+                sub = json.loads(user.web_push_subscription)
+                await send_push_notification(sub, deal_dict, rec, language)
+            except Exception as exc:
+                log.warning("dispatch_alerts: web push parse error: %s", exc)
 
     # Mark as sent
     async with AsyncSessionLocal() as db:
