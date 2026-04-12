@@ -6,6 +6,7 @@ from app.models.transfer_partner import TransferPartner
 from app.models.program_baseline import ProgramBaseline
 from app.models.prices import AmadeusPrice, GooglePrice, KiwiPrice, DuffelPrice, AwardPrice
 from app.models.deal import DealAnalysis
+from app.models.scan_history import ScanHistory
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "DuffelPrice",
     "AwardPrice",
     "DealAnalysis",
+    "ScanHistory",
 ]

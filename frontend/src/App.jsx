@@ -7,6 +7,7 @@ import PriceHistory from "./pages/PriceHistory";
 import AirportCompare from "./pages/AirportCompare";
 import AlertSettings from "./pages/AlertSettings";
 import Settings from "./pages/Settings";
+import ScanHistory from "./pages/ScanHistory";
 import Layout from "./components/Layout";
 
 function RequireAuth({ children }) {
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="airports" element={<AirportCompare />} />
           <Route path="alerts" element={<AlertSettings />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="scans" element={<ScanHistory />} />
         </Route>
       </Routes>
     </BrowserRouter>

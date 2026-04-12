@@ -6,6 +6,7 @@ import clsx from "clsx";
 const NAV = [
   { to: "/",         label: "Deal Feed",       icon: <IconDeals /> },
   { to: "/routes",   label: "Routes",           icon: <IconRoutes /> },
+  { to: "/scans",    label: "Scan History",     icon: <IconScan /> },
   { to: "/prices",   label: "Price History",    icon: <IconChart /> },
   { to: "/airports", label: "Airport Compare",  icon: <IconMap /> },
   { to: "/alerts",   label: "Alerts",           icon: <IconBell /> },
@@ -122,6 +123,11 @@ function IconRoutes() {
     <circle cx="3" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/>
     <path d="M4.5 8h7"/>
     <path d="M8 4.5l2 2-2 2"/>
+  </svg>;
+}
+function IconScan() {
+  return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/>
   </svg>;
 }
 function IconChart() {
