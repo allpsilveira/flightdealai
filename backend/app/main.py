@@ -13,15 +13,23 @@ settings = get_settings()
 
 def _run_migrations():
     """Run Alembic migrations on startup so schema is always in sync with models."""
+    import os
+    import subprocess
     try:
-        from alembic.config import Config
-        from alembic import command
-        import os
-        # Alembic.ini is at the repo root, one level above /app
-        alembic_ini = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
-        alembic_cfg = Config(os.path.abspath(alembic_ini))
-        command.upgrade(alembic_cfg, "head")
-        logger.info("alembic_migrations_ok")
+        # Run alembic in a subprocess — avoids asyncio event-loop conflict with FastAPI
+        # and uses the working directory where alembic.ini lives (/app)
+        app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=app_root,
+            capture_output=True,
+            text=True,
+            env=os.environ.copy(),   # inherits DATABASE_URL + all env vars from EasyPanel
+        )
+        if result.returncode == 0:
+            logger.info("alembic_migrations_ok", output=(result.stdout or "")[-300:])
+        else:
+            logger.error("alembic_migrations_failed", stderr=(result.stderr or "")[-500:])
     except Exception as exc:
         logger.error("alembic_migrations_failed", error=str(exc))
 
