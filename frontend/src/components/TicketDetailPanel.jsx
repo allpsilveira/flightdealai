@@ -114,15 +114,19 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
   const savings    = typicalMid ? Math.round(typicalMid - deal.best_price_usd) : null;
   const savingsPct = typicalMid && savings > 0 ? Math.round((savings / typicalMid) * 100) : null;
 
-  // Google Flights booking link
+  // Google Flights booking link — formats date as "May 31 2026" which Google parses better
   const cabinSearchLabel = {
     BUSINESS: "business class", FIRST: "first class", PREMIUM_ECONOMY: "premium economy",
   };
-  const googleFlightsUrl = deal.origin && deal.destination && deal.departure_date
-    ? `https://www.google.com/travel/flights?q=flights+${
-        encodeURIComponent(cabinSearchLabel[deal.cabin_class] ?? "business class")
-      }+${deal.origin}+to+${deal.destination}+on+${deal.departure_date}`
-    : null;
+  const googleFlightsUrl = (() => {
+    if (!deal.origin || !deal.destination || !deal.departure_date) return null;
+    const d = new Date(deal.departure_date + "T12:00:00");
+    const dateStr = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    const cabin = cabinSearchLabel[deal.cabin_class] ?? "business class";
+    return `https://www.google.com/travel/flights?q=${encodeURIComponent(
+      `${cabin} flights ${deal.origin} to ${deal.destination} ${dateStr}`
+    )}`;
+  })();
 
   const scoreRows = [
     { label: "Percentile (18)",     value: Math.round((deal.score_percentile / 30) * 18),     max: 18 },
