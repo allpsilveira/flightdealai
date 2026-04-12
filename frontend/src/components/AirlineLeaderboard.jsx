@@ -100,9 +100,14 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
         // Savings vs cheapest (only show for non-cheapest rows)
         const overBy = i > 0 ? Math.round(offer.price_usd - cheapest) : null;
 
-        // Skyscanner deep link — specific date + route + cabin
+        // Both links: Google Flights (generic search) + Skyscanner (date-specific deep link)
+        const depDate = offer.departure_date ? new Date(offer.departure_date + "T12:00:00") : null;
+        const depFormatted = depDate ? depDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
         const dateStr = offer.departure_date?.replace(/-/g, "") ?? null;
-        const gfUrl = offer.origin && offer.destination && dateStr
+        const gfUrl = offer.origin && offer.destination
+          ? `https://www.google.com/travel/flights?q=${encodeURIComponent(`${name} flights ${offer.origin} to ${offer.destination}${depFormatted ? " " + depFormatted : ""}`)}`
+          : null;
+        const skyScanUrl = offer.origin && offer.destination && dateStr
           ? `https://www.skyscanner.com/transport/flights/${offer.origin.toLowerCase()}/${offer.destination.toLowerCase()}/${dateStr}/?cabin_class=business&adultsv2=1`
           : null;
 
@@ -171,18 +176,24 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
               {overBy != null && (
                 <span className="text-xs text-zinc-400 dark:text-zinc-500">+${overBy.toLocaleString()}</span>
               )}
-              {gfUrl && (
-                <a
-                  href={gfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium"
-                  title={`Search ${name} on Skyscanner`}
-                >
-                  Skyscanner ↗
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                {gfUrl && (
+                  <a href={gfUrl} target="_blank" rel="noopener noreferrer"
+                     onClick={(e) => e.stopPropagation()}
+                     className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium"
+                     title={`Search ${name} on Google Flights`}>
+                    Google ↗
+                  </a>
+                )}
+                {skyScanUrl && (
+                  <a href={skyScanUrl} target="_blank" rel="noopener noreferrer"
+                     onClick={(e) => e.stopPropagation()}
+                     className="text-xs text-[#0770e3] hover:text-blue-700 dark:text-blue-400 font-medium"
+                     title={`Search ${name} on Skyscanner — specific date`}>
+                    Sky ↗
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         );

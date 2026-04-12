@@ -18,6 +18,8 @@ from app.models.scan_history import ScanHistory
 from app.models.user import User
 from app.services.scanner import scan_route, expand_origins_by_drive
 from app.services.deal_pipeline import run_pipeline_batch
+from app.services import seats_aero_client
+from app.config import get_settings
 
 router = APIRouter()
 
@@ -214,3 +216,25 @@ async def scan_history(
         stmt = stmt.where(ScanHistory.route_id == route_id)
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+@router.get("/diagnostics")
+async def diagnostics(
+    user: User = Depends(get_current_user),
+):
+    """
+    Checks API key configuration for all data sources.
+    Visit /docs → GET /scan/diagnostics to verify connectivity without running a full scan.
+    """
+    cfg = get_settings()
+    seats = await seats_aero_client.ping()
+    return {
+        "serpapi":    {"key_set": bool(cfg.serpapi_api_key),   "key_preview": cfg.serpapi_api_key[:8] + "…" if cfg.serpapi_api_key else "NOT SET"},
+        "duffel":     {"key_set": bool(cfg.duffel_api_key),    "key_preview": cfg.duffel_api_key[:12] + "…" if cfg.duffel_api_key else "NOT SET"},
+        "seats_aero": {
+            "key_set":     bool(cfg.seats_aero_api_key),
+            "key_preview": cfg.seats_aero_api_key[:10] + "…" if cfg.seats_aero_api_key else "NOT SET",
+            "ping":        seats,
+        },
+        "anthropic":  {"key_set": bool(cfg.anthropic_api_key), "key_preview": cfg.anthropic_api_key[:10] + "…" if cfg.anthropic_api_key else "NOT SET"},
+    }

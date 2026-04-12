@@ -24,7 +24,29 @@ CABIN_MAP = {
 
 
 def _headers() -> dict:
-    return {"Partner-Authorization": settings.seats_aero_api_key}
+    return {
+        "Partner-Authorization": settings.seats_aero_api_key,
+        "accept": "application/json",
+    }
+
+
+async def ping() -> dict:
+    """
+    Quick connectivity check — fetches the /routes list.
+    Used by the diagnostic endpoint to confirm the API key works.
+    """
+    if not settings.seats_aero_api_key:
+        return {"ok": False, "error": "SEATS_AERO_API_KEY not set in environment"}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{BASE_URL}/routes", headers=_headers())
+        return {
+            "ok": resp.status_code == 200,
+            "status": resp.status_code,
+            "body_preview": resp.text[:400],
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 async def search_award_availability(
@@ -38,7 +60,7 @@ async def search_award_availability(
     Returns list of normalized award options or None on failure.
     """
     if not settings.seats_aero_api_key:
-        logger.warning("seats_aero_no_key")
+        logger.error("seats_aero_no_key", hint="Set SEATS_AERO_API_KEY in EasyPanel environment")
         return None
 
     params = {
@@ -48,7 +70,7 @@ async def search_award_availability(
         "end_date":            departure_date.isoformat(),
         "cabin":               CABIN_MAP.get(cabin_class, "business"),
         "order_by":            "mileage",
-        "limit":               10,
+        "take":                10,   # Seats.aero uses 'take', not 'limit'
     }
 
     try:
@@ -58,13 +80,23 @@ async def search_award_availability(
                 params=params,
                 headers=_headers(),
             )
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                logger.error(
+                    "seats_aero_http_error",
+                    status=resp.status_code,
+                    body=resp.text[:300],
+                    origin=origin, destination=destination,
+                )
+                return None
             data = resp.json()
+        items = data.get("data", [])
+        logger.info("seats_aero_search_ok", origin=origin, destination=destination,
+                    cabin=cabin_class, results=len(items))
         return [_normalize(item, origin, destination, departure_date, cabin_class)
-                for item in data.get("data", [])]
+                for item in items]
     except Exception as exc:
-        logger.warning("seats_aero_search_failed", origin=origin, destination=destination,
-                       date=str(departure_date), cabin=cabin_class, error=str(exc))
+        logger.error("seats_aero_search_failed", origin=origin, destination=destination,
+                     date=str(departure_date), cabin=cabin_class, error=str(exc))
         return None
 
 
