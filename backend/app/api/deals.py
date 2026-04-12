@@ -59,12 +59,16 @@ class DealResponse(BaseModel):
 
 class FlightOfferResponse(BaseModel):
     id: uuid.UUID
-    price_usd: float
+    deal_analysis_id: uuid.UUID | None
     primary_airline: str | None
     airline_codes: list[str]
+    price_usd: float
     stops: int
     duration_minutes: int | None
     is_direct: bool
+    departure_date: date | None = None
+    origin: str | None = None
+    destination: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -198,6 +202,59 @@ async def get_deal(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Deal not found")
     return deal
+
+
+@router.get("/offers/route/{route_id}", response_model=list[FlightOfferResponse])
+async def get_route_offers(
+    route_id: uuid.UUID,
+    cabin_class: str | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the cheapest FlightOffer per airline across ALL deals for this route.
+    Spans the full date range — not just one scan. Powers the AirlineLeaderboard.
+    Includes deal_analysis_id so the frontend can open the correct deal panel per airline.
+    """
+    # Subquery: minimum price per primary_airline for this route
+    min_price_sq = (
+        select(
+            FlightOffer.primary_airline,
+            func.min(FlightOffer.price_usd).label("min_price"),
+        )
+        .where(FlightOffer.route_id == route_id)
+        .where(FlightOffer.primary_airline.isnot(None))
+    )
+    if cabin_class:
+        min_price_sq = min_price_sq.where(FlightOffer.cabin_class == cabin_class)
+    min_price_sq = min_price_sq.group_by(FlightOffer.primary_airline).subquery()
+
+    # Main query: join to get the full offer row for each airline's cheapest price
+    stmt = (
+        select(FlightOffer)
+        .join(
+            min_price_sq,
+            and_(
+                FlightOffer.primary_airline == min_price_sq.c.primary_airline,
+                FlightOffer.price_usd == min_price_sq.c.min_price,
+            ),
+        )
+        .where(FlightOffer.route_id == route_id)
+        .order_by(FlightOffer.price_usd.asc())
+    )
+    if cabin_class:
+        stmt = stmt.where(FlightOffer.cabin_class == cabin_class)
+
+    result = await db.execute(stmt)
+    # Deduplicate (multiple rows can match at the same min price for an airline)
+    seen: set[str] = set()
+    offers = []
+    for offer in result.scalars().all():
+        key = offer.primary_airline or "??"
+        if key not in seen:
+            seen.add(key)
+            offers.append(offer)
+    return offers
 
 
 @router.get("/{deal_id}/offers", response_model=list[FlightOfferResponse])

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { formatDistanceToNow, format } from "date-fns";
 import {
@@ -63,15 +63,14 @@ export default function RouteDetail() {
       .catch(() => setDeals([]));
   }, [id]);
 
-  // Load per-airline flight offers for the best deal (powers AirlineLeaderboard)
+  // Load per-airline offers across ALL deals for this route (powers AirlineLeaderboard)
   useEffect(() => {
-    const visible = cabinFilter ? deals.filter((d) => d.cabin_class === cabinFilter) : deals;
-    const best = visible[0] ?? null;
-    if (!best) { setBestOffers([]); return; }
-    api.get(`/deals/${best.id}/offers`)
+    if (!id) return;
+    const params = cabinFilter ? { cabin_class: cabinFilter } : {};
+    api.get(`/deals/offers/route/${id}`, { params })
       .then((r) => setBestOffers(r.data))
       .catch(() => setBestOffers([]));
-  }, [deals, cabinFilter]);
+  }, [id, cabinFilter]);
 
   // Load price history
   useEffect(() => {
@@ -124,6 +123,9 @@ export default function RouteDetail() {
 
   // Best deal for current price reference
   const bestDeal = filteredDeals[0] ?? null;
+
+  // Map of deal.id → deal for AirlineLeaderboard per-row resolution
+  const dealMap = useMemo(() => new Map(deals.map((d) => [d.id, d])), [deals]);
 
   return (
     <div className="min-h-0">
@@ -315,7 +317,7 @@ export default function RouteDetail() {
         </div>
 
         {/* ── Right: Leaderboard + Award + AI ────────────────────────── */}
-        <div className="lg:w-80 xl:w-96 p-6 sm:p-8 space-y-5 flex-shrink-0">
+        <div className="lg:w-[460px] xl:w-[520px] p-6 sm:p-8 space-y-5 flex-shrink-0">
 
           {/* Airline leaderboard */}
           <div>
@@ -326,6 +328,7 @@ export default function RouteDetail() {
               <AirlineLeaderboard
                 offers={bestOffers}
                 parentDeal={bestDeal}
+                dealMap={dealMap}
                 onSelect={setSelectedDeal}
                 selectedDeal={selectedDeal}
               />

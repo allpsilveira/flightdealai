@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import api from "../lib/api";
 import cabinQuality from "../data/cabin_quality.json";
 import transferPartners from "../data/transfer_partners.json";
 import loungeAccess from "../data/lounge_access.json";
+import AirportComparisonMap from "./AirportComparisonMap";
 
 const CABIN_LABEL = {
   BUSINESS: "Business", FIRST: "First Class", PREMIUM_ECONOMY: "Premium Economy",
@@ -55,17 +56,24 @@ const StopLabel = ({ stops }) =>
     ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">Direct</span>
     : <span>{stops} stop{stops > 1 ? "s" : ""}</span>;
 
-const ScoreRow = ({ label, value, max }) => {
+const ScoreRow = ({ label, value, max, description }) => {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-zinc-400 dark:text-zinc-500 w-32 flex-shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-        <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} />
+    <div className="space-y-1">
+      <div className="flex items-center gap-3">
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 w-36 flex-shrink-0">{label}</span>
+        <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+          <div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 tabular-nums w-8 text-right">
+          {Math.round(value)}
+        </span>
       </div>
-      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums w-8 text-right">
-        {Math.round(value)}
-      </span>
+      {description && (
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 pl-[calc(9rem+12px)] leading-tight">
+          {description}
+        </p>
+      )}
     </div>
   );
 };
@@ -129,15 +137,15 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
   })();
 
   const scoreRows = [
-    { label: "Percentile (18)",     value: Math.round((deal.score_percentile / 30) * 18),     max: 18 },
-    { label: "Z-score (12)",        value: Math.round((deal.score_zscore / 20) * 12),          max: 12 },
-    { label: "Trend align (9)",     value: Math.round((deal.score_trend_alignment / 15) * 9),  max: 9  },
-    { label: "Trend direction (6)", value: Math.round((deal.score_trend_direction / 10) * 6),  max: 6  },
-    { label: "Cross-source (12)",   value: Math.round((deal.score_cross_source / 20) * 12),    max: 12 },
-    { label: "Arbitrage (6)",       value: Math.round((deal.score_arbitrage / 10) * 6),        max: 6  },
-    { label: "Fare brand (6)",      value: Math.round((deal.score_fare_brand / 10) * 6),       max: 6  },
-    { label: "Scarcity (3)",        value: Math.round((deal.score_scarcity / 5) * 3),          max: 3  },
-    { label: "Award bonus (28)",    value: Math.round((deal.score_award / 50) * 28),           max: 28 },
+    { label: "Percentile (18)",     value: Math.round((deal.score_percentile / 30) * 18),     max: 18, description: "How rare this price is in 90 days of history. Bottom 5% = full points." },
+    { label: "Z-score (12)",        value: Math.round((deal.score_zscore / 20) * 12),          max: 12, description: "How many standard deviations below the average. ≥2.5σ may indicate an error fare." },
+    { label: "Trend align (9)",     value: Math.round((deal.score_trend_alignment / 15) * 9),  max: 9,  description: "Whether this price is below Google's typical price range for this route." },
+    { label: "Trend direction (6)", value: Math.round((deal.score_trend_direction / 10) * 6),  max: 6,  description: "7-day price slope. Rising prices = lower score; falling = higher score." },
+    { label: "Cross-source (12)",   value: Math.round((deal.score_cross_source / 20) * 12),    max: 12, description: "How many data sources agree this is a low price (Google, Duffel, Seats.aero)." },
+    { label: "Arbitrage (6)",       value: Math.round((deal.score_arbitrage / 10) * 6),        max: 6,  description: "Savings between the cheapest and most expensive departure airport for this route." },
+    { label: "Fare brand (6)",      value: Math.round((deal.score_fare_brand / 10) * 6),       max: 6,  description: "Business Lite detected well below standard rate — more seat, lower price." },
+    { label: "Scarcity (3)",        value: Math.round((deal.score_scarcity / 5) * 3),          max: 3,  description: "Fewer seats remaining = higher urgency. 1 seat left = maximum points." },
+    { label: "Award bonus (28)",    value: Math.round((deal.score_award / 50) * 28),           max: 28, description: "Miles redemption value vs cash. High CPP (cents per point) = strong award deal." },
   ];
 
   return (
@@ -254,9 +262,11 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                             divide-y divide-zinc-100 dark:divide-zinc-700/60">
               {/* Google Flights */}
               <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
-                <div>
-                  <p className="text-xs font-semibold text-zinc-900 dark:text-white">Google Flights</p>
-                  <p className="text-2xs text-zinc-400 mt-0.5">Best available online price</p>
+                <div className="flex-1 mr-4">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Google Flights</p>
+                  <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
+                    Aggregated from all airlines. Updated every scan.
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
@@ -277,20 +287,34 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
               </div>
 
               {/* Duffel */}
-              <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
-                <div>
-                  <p className="text-xs font-semibold text-zinc-900 dark:text-white">Direct via Airline</p>
+              <div className="flex items-start justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
+                <div className="flex-1 mr-4">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Direct via Airline</p>
                   {loadingEnrich ? (
-                    <p className="text-2xs text-zinc-400 mt-0.5">Loading…</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Loading…</p>
                   ) : enrichment?.duffel ? (
-                    <p className="text-2xs text-zinc-400 mt-0.5">
-                      {enrichment.duffel.fare_brand_name ?? "Standard fare"}
-                      {enrichment.duffel.is_refundable === true && " · Refundable"}
-                      {enrichment.duffel.is_refundable === false && " · Non-refundable"}
-                      {enrichment.duffel.baggage_included && " · Bag included"}
-                    </p>
+                    <div className="mt-0.5 space-y-0.5">
+                      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                        {enrichment.duffel.fare_brand_name ?? "Standard fare"}
+                      </p>
+                      <p className="text-xs text-zinc-400 leading-snug">
+                        {[
+                          enrichment.duffel.is_refundable === true && "Refundable",
+                          enrichment.duffel.is_refundable === false && "Non-refundable",
+                          enrichment.duffel.baggage_included && "Bag included",
+                          enrichment.duffel.change_fee_usd != null && `Change fee: $${enrichment.duffel.change_fee_usd}`,
+                        ].filter(Boolean).join(" · ")}
+                      </p>
+                      {enrichment.duffel.expires_at && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                          Offer expires {formatDistanceToNow(new Date(enrichment.duffel.expires_at), { addSuffix: true })}
+                        </p>
+                      )}
+                    </div>
                   ) : (
-                    <p className="text-2xs text-zinc-400 mt-0.5">Run "Scan Now" to load</p>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
+                      Fare booked directly with the carrier — includes brand, refund conditions, and baggage. Run "Scan Now" to load.
+                    </p>
                   )}
                 </div>
                 <div className="text-right">
@@ -312,35 +336,35 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
               </div>
 
               {/* Award */}
-              <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
-                <div>
-                  <p className="text-xs font-semibold text-zinc-900 dark:text-white">Best Award</p>
+              <div className="flex items-start justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/60">
+                <div className="flex-1 mr-4">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Best Award</p>
                   {loadingEnrich ? (
-                    <p className="text-2xs text-zinc-400 mt-0.5">Loading…</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Loading…</p>
                   ) : enrichment?.awards?.length > 0 ? (
                     <div className="mt-0.5 space-y-0.5">
-                      <p className="text-2xs text-zinc-500 dark:text-zinc-400">
+                      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
                         via {enrichment.awards[0].loyalty_program}
                       </p>
                       {enrichment.awards[0].cash_taxes_usd > 0 && (
-                        <p className="text-2xs text-zinc-400">
-                          + ${enrichment.awards[0].cash_taxes_usd.toLocaleString()} taxes
+                        <p className="text-xs text-zinc-400">
+                          + ${enrichment.awards[0].cash_taxes_usd.toLocaleString()} in taxes
                         </p>
                       )}
                       {enrichment.awards[0].seats_available <= 4 && (
-                        <p className="text-2xs font-semibold text-amber-600 dark:text-amber-400">
+                        <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
                           ⚡ {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} left
                         </p>
                       )}
                       {xfers.length > 0 && (
-                        <p className="text-2xs text-zinc-400">
-                          Transfer from: {xfers.slice(0, 2).join(", ")}
+                        <p className="text-xs text-zinc-400">
+                          Transfer from: {xfers.join(", ")}
                         </p>
                       )}
                     </div>
                   ) : (
-                    <p className="text-2xs text-zinc-400 mt-0.5">
-                      Run "Scan Now" to check award space
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-snug">
+                      Award space from Seats.aero — 24 loyalty programs checked. Run "Scan Now" to check availability.
                     </p>
                   )}
                 </div>
@@ -365,58 +389,73 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
             </div>
           </div>
 
-          {/* Award Programs — full breakdown if multiple available */}
-          {!loadingEnrich && enrichment?.awards?.length > 1 && (
+          {/* Award Programs — full breakdown if any available */}
+          {!loadingEnrich && enrichment?.awards?.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
-                All Award Options
+                Award Options
               </p>
               <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
                               divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                {enrichment.awards.map((award, i) => (
-                  <div
-                    key={`${award.loyalty_program}-${i}`}
-                    className={`flex items-center justify-between px-4 py-3 ${
-                      i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"
-                    }`}
-                  >
-                    <div>
-                      <p className="text-xs font-semibold text-zinc-900 dark:text-white">
-                        {award.loyalty_program}
-                        {i === 0 && (
-                          <span className="ml-2 text-2xs text-emerald-600 dark:text-emerald-400 font-bold">Best</span>
-                        )}
-                      </p>
-                      <p className="text-2xs text-zinc-400 mt-0.5">
-                        {award.seats_available} seat{award.seats_available !== 1 ? "s" : ""}
-                        {award.operating_airline && ` · ${award.operating_airline}`}
-                        {award.cash_taxes_usd > 0 && ` · $${award.cash_taxes_usd.toLocaleString()} taxes`}
-                      </p>
+                {enrichment.awards.map((award, i) => {
+                  const awardXfers = transferPartners[award.loyalty_program] ?? [];
+                  return (
+                    <div
+                      key={`${award.loyalty_program}-${i}`}
+                      className={`px-4 py-3 ${
+                        i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                            {award.loyalty_program}
+                            {i === 0 && (
+                              <span className="ml-2 text-xs text-emerald-600 dark:text-emerald-400 font-bold">Best value</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-zinc-400 mt-0.5">
+                            {award.seats_available} seat{award.seats_available !== 1 ? "s" : ""}
+                            {award.operating_airline && ` · Operated by ${award.operating_airline}`}
+                            {award.cash_taxes_usd > 0 && ` · $${award.cash_taxes_usd.toLocaleString()} taxes`}
+                          </p>
+                          {awardXfers.length > 0 && (
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              Transfer from: <span className="text-zinc-600 dark:text-zinc-300">{awardXfers.join(", ")}</span>
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
+                            {award.miles_cost.toLocaleString()}
+                            <span className="text-xs font-normal text-zinc-400 ml-0.5">pts</span>
+                          </p>
+                          {award.cpp_value != null && (
+                            <p className="text-xs text-brand-500 tabular-nums font-semibold">
+                              {award.cpp_value.toFixed(2)}¢/pt
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums">
-                        {award.miles_cost.toLocaleString()}
-                        <span className="text-xs font-normal text-zinc-400 ml-0.5">pts</span>
-                      </p>
-                      {award.cpp_value != null && (
-                        <p className="text-2xs text-brand-500 tabular-nums font-semibold">
-                          {award.cpp_value.toFixed(2)}¢/pt
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Airport comparison (embedded) */}
-          {routeOrigins.length > 1 && (
-            <div>
-              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
-                Airport Comparison
-              </p>
-              <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
+          {/* Airport comparison — always show map (nearby airports even if route has 1 origin) */}
+          <div>
+            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+              Nearby Airports
+            </p>
+            <AirportComparisonMap
+              originCodes={routeOrigins.length > 0 ? routeOrigins : [deal.origin]}
+              destCodes={[deal.destination]}
+              dealsByOrigin={{ [deal.origin]: { price_usd: deal.best_price_usd, departure_date: deal.departure_date } }}
+            />
+            {routeOrigins.length > 1 && (
+              <div className="mt-2 rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
                               divide-y divide-zinc-100 dark:divide-zinc-700/60">
                 {routeOrigins.map((origin) => (
                   <div
@@ -430,8 +469,8 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-zinc-900 dark:text-white">{origin}</span>
                       {origin === deal.origin && (
-                        <span className="text-2xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                          Best price ✓
+                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Cheapest ✓
                         </span>
                       )}
                     </div>
@@ -441,65 +480,92 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                           ${deal.best_price_usd?.toLocaleString()}
                         </p>
                       ) : (
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500">Run scan to compare</p>
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500">Scan to compare prices</p>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Flight Options */}
           <div>
             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
-              Flight Options
+              All Flight Options on This Route
+            </p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-3 leading-snug">
+              Cheapest fare found per airline for this departure date. Prices from Google Flights via SerpApi.
             </p>
             {loadingOffers ? (
               <div className="h-16 rounded-xl bg-zinc-50 dark:bg-zinc-800 animate-pulse" />
             ) : offers?.length > 0 ? (
               <div className="rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
                               divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                {offers.map((offer, i) => (
-                  <div
-                    key={offer.id}
-                    className={`flex items-center justify-between px-4 py-3 ${
-                      i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
+                {offers.map((offer, i) => {
+                  const airlineName = AIRLINE_NAME[offer.primary_airline] ?? offer.primary_airline ?? "Unknown";
+                  const depDate = offer.departure_date
+                    ? new Date(offer.departure_date + "T12:00:00")
+                    : null;
+                  const gfUrl = offer.origin && offer.destination
+                    ? `https://www.google.com/travel/flights?q=${encodeURIComponent(
+                        `${airlineName} flights ${offer.origin} to ${offer.destination}${depDate ? " " + depDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}`
+                      )}`
+                    : null;
+                  return (
+                    <div
+                      key={offer.id}
+                      className={`flex items-center gap-3 px-4 py-3 ${
+                        i === 0 ? "bg-emerald-50 dark:bg-emerald-500/10" : "bg-zinc-50 dark:bg-zinc-800/60"
+                      }`}
+                    >
                       {offer.primary_airline && (
                         <img
                           src={airlineLogo(offer.primary_airline)}
                           alt={offer.primary_airline}
-                          className="w-6 h-6 rounded object-contain bg-white dark:bg-zinc-700 p-0.5 flex-shrink-0"
+                          className="w-7 h-7 rounded object-contain bg-white dark:bg-zinc-700 p-0.5 flex-shrink-0"
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       )}
-                      <div>
-                        <p className="text-xs font-medium text-zinc-900 dark:text-white flex items-center gap-1.5">
-                          <StopLabel stops={offer.stops} />
-                          {offer.airline_codes?.length > 1 && (
-                            <span className="text-zinc-400">· {offer.airline_codes.join(" + ")}</span>
-                          )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-white flex items-center gap-2 flex-wrap">
+                          {airlineName}
                           {i === 0 && (
-                            <span className="text-2xs text-emerald-600 dark:text-emerald-400 font-semibold">Best</span>
+                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">Cheapest</span>
                           )}
                         </p>
-                        {offer.duration_minutes && (
-                          <p className="text-2xs text-zinc-400 mt-0.5">{fmtMins(offer.duration_minutes)}</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <StopLabel stops={offer.stops} />
+                          {offer.duration_minutes && <span>{fmtMins(offer.duration_minutes)}</span>}
+                          {offer.airline_codes?.length > 1 && (
+                            <span className="text-zinc-400">Codeshare: {offer.airline_codes.join(" + ")}</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
+                        <p className={`text-sm font-bold tabular-nums ${
+                          i === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-900 dark:text-white"
+                        }`}>
+                          ${offer.price_usd?.toLocaleString()}
+                        </p>
+                        {gfUrl && (
+                          <a
+                            href={gfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium"
+                          >
+                            Search ↗
+                          </a>
                         )}
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-zinc-900 dark:text-white tabular-nums flex-shrink-0">
-                      ${offer.price_usd?.toLocaleString()}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
-                No offer breakdown yet — appears after next scan.
+                No offer breakdown yet — run Scan Now to populate per-airline prices.
               </p>
             )}
           </div>
@@ -552,9 +618,9 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [] }) 
                 Most scores require 30+ days of price history.
               </p>
             )}
-            <div className="space-y-2">
-              {scoreRows.map(({ label, value, max }) => (
-                <ScoreRow key={label} label={label} value={value} max={max} />
+            <div className="space-y-3">
+              {scoreRows.map(({ label, value, max, description }) => (
+                <ScoreRow key={label} label={label} value={value} max={max} description={description} />
               ))}
             </div>
           </div>

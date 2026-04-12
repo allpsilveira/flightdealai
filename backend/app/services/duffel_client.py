@@ -62,8 +62,8 @@ async def enrich_offer(
         return _normalize(best, origin, destination, departure_date, cabin_class)
 
     except Exception as exc:
-        logger.warning("duffel_enrich_failed", origin=origin, destination=destination,
-                       date=str(departure_date), cabin=cabin_class, error=str(exc))
+        logger.error("duffel_enrich_failed", origin=origin, destination=destination,
+                     date=str(departure_date), cabin=cabin_class, error=str(exc))
         return None
 
 
