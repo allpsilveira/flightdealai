@@ -31,7 +31,16 @@
       "Bash(powershell -Command \"Test-Path 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe'\")",
       "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Program Files\\\\Docker' -Recurse -Filter 'docker.exe' -ErrorAction SilentlyContinue | Select-Object FullName\")",
       "Bash(git commit -m ':*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(python3 -c ':*)",
+      "Bash(py -3 -c ':*)",
+      "Read(//usr/**)",
+      "Read(//usr/local/**)",
+      "Bash(/c/Users/caned/AppData/Roaming/uv/python/cpython-3.14.4-windows-x86_64-none/Scripts/python.exe -c ':*)",
+      "Read(//c/Users/caned/AppData/Roaming/uv/python//**)",
+      "Read(//c/Users/caned/AppData/Local/Programs/**)",
+      "Bash(\"/c/Users/caned/AppData/Roaming/uv/python/cpython-3.14.4-windows-x86_64-none/python.exe\" -c \"import ast; print\\('Python works'\\)\")",
+      "Bash(/c/Users/caned/AppData/Roaming/uv/python/cpython-3.14.4-windows-x86_64-none/python.exe -c ':*)"
     ]
   }
 }

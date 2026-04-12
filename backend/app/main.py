@@ -15,16 +15,30 @@ def _run_migrations():
     """Run Alembic migrations on startup so schema is always in sync with models."""
     import os
     import subprocess
+
+    # Walk up from this file to find the directory containing alembic.ini
+    search = os.path.abspath(os.path.dirname(__file__))
+    alembic_dir = None
+    for _ in range(6):
+        if os.path.exists(os.path.join(search, "alembic.ini")):
+            alembic_dir = search
+            break
+        parent = os.path.dirname(search)
+        if parent == search:
+            break
+        search = parent
+
+    if not alembic_dir:
+        logger.error("alembic_migrations_failed", error="alembic.ini not found anywhere in directory tree")
+        return
+
     try:
-        # Run alembic in a subprocess — avoids asyncio event-loop conflict with FastAPI
-        # and uses the working directory where alembic.ini lives (/app)
-        app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         result = subprocess.run(
             ["alembic", "upgrade", "head"],
-            cwd=app_root,
+            cwd=alembic_dir,
             capture_output=True,
             text=True,
-            env=os.environ.copy(),   # inherits DATABASE_URL + all env vars from EasyPanel
+            env=os.environ.copy(),
         )
         if result.returncode == 0:
             logger.info("alembic_migrations_ok", output=(result.stdout or "")[-300:])
