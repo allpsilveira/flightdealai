@@ -433,11 +433,14 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
                               + ${enrichment.awards[0].cash_taxes_usd.toLocaleString()} taxes
                             </p>
                           )}
-                          {enrichment.awards[0].seats_available <= 4 && (
-                            <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                              ⚡ {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} left
-                            </p>
-                          )}
+                          <p className={`text-xs font-semibold ${
+                            enrichment.awards[0].seats_available <= 4
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-zinc-500 dark:text-zinc-400"
+                          }`}>
+                            {enrichment.awards[0].seats_available <= 4 && "⚡ "}
+                            {enrichment.awards[0].seats_available} seat{enrichment.awards[0].seats_available !== 1 ? "s" : ""} available
+                          </p>
                           {xfers.length > 0 && (
                             <p className="text-xs text-zinc-400">
                               Transfer from: {xfers.join(", ")}
@@ -573,38 +576,94 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
                       : { [deal.origin]: { price_usd: deal.best_price_usd, departure_date: deal.departure_date } }
                   }
                 />
-                {routeOrigins.length > 1 && (
-                  <div className="mt-2 rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
-                                  divide-y divide-zinc-100 dark:divide-zinc-700/60">
-                    {routeOrigins.map((origin) => (
-                      <div
-                        key={origin}
-                        className={`flex items-center justify-between px-4 py-3 ${
-                          origin === deal.origin
-                            ? "bg-emerald-50 dark:bg-emerald-500/10"
-                            : "bg-zinc-50 dark:bg-zinc-800/60"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-zinc-900 dark:text-white">{origin}</span>
-                          <span className="text-xs text-zinc-400">{airportMap[origin]?.city ?? ""}</span>
-                          {origin === deal.origin && (
-                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">Cheapest ✓</span>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          {origin === deal.origin ? (
-                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                              ${deal.best_price_usd?.toLocaleString()}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-zinc-400">Scan to compare</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  // Merge user-selected origins + nearby airports scanned via drive expansion
+                  const allOrigins = [...new Set([...routeOrigins, ...Object.keys(dealsByOrigin)])];
+                  if (allOrigins.length <= 1) return null;
+
+                  // Sort cheapest first, unscanned last
+                  const sorted = [...allOrigins].sort((a, b) => {
+                    const pa = dealsByOrigin[a]?.price_usd ?? Infinity;
+                    const pb = dealsByOrigin[b]?.price_usd ?? Infinity;
+                    return pa - pb;
+                  });
+
+                  const scannedPrices = sorted.map(c => dealsByOrigin[c]?.price_usd).filter(Boolean);
+                  const cheapestPrice = scannedPrices.length ? Math.min(...scannedPrices) : null;
+
+                  return (
+                    <div className="mt-2 rounded-xl border border-zinc-100 dark:border-zinc-700/60 overflow-hidden
+                                    divide-y divide-zinc-100 dark:divide-zinc-700/60">
+                      {sorted.map((origin) => {
+                        const price = dealsByOrigin[origin]?.price_usd;
+                        const isCheapest = price != null && cheapestPrice != null && Math.round(price) <= Math.round(cheapestPrice);
+                        const savings = price != null && cheapestPrice != null && !isCheapest
+                          ? Math.round(price - cheapestPrice) : null;
+                        const isPrimary = routeOrigins.includes(origin);
+
+                        // Drive time from nearest primary origin (only for expanded nearby airports)
+                        let driveLabel = null;
+                        if (!isPrimary && routeOrigins.length > 0) {
+                          let bestKm = Infinity;
+                          for (const primary of routeOrigins) {
+                            const apA = airportMap[primary];
+                            const apB = airportMap[origin];
+                            if (!apA || !apB) continue;
+                            const km = haversineKm(apA.lat, apA.lon, apB.lat, apB.lon);
+                            if (km < bestKm) bestKm = km;
+                          }
+                          if (bestKm < Infinity && bestKm > 10) {
+                            const h = (bestKm * 1.3) / 80;
+                            driveLabel = h < 1 ? `${Math.round(h * 60)}min drive` : `${h.toFixed(1)}h drive`;
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={origin}
+                            className={`flex items-center justify-between px-4 py-3 ${
+                              isCheapest && price != null
+                                ? "bg-emerald-50 dark:bg-emerald-500/10"
+                                : "bg-zinc-50 dark:bg-zinc-800/60"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm font-semibold text-zinc-900 dark:text-white flex-shrink-0">{origin}</span>
+                              <span className="text-xs text-zinc-400 truncate">{airportMap[origin]?.city ?? ""}</span>
+                              {driveLabel && (
+                                <span className="text-xs bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400
+                                                 rounded px-1.5 py-0.5 flex-shrink-0">
+                                  {driveLabel}
+                                </span>
+                              )}
+                              {!isPrimary && (
+                                <span className="text-xs text-zinc-400 italic flex-shrink-0">nearby</span>
+                              )}
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-3">
+                              {price != null ? (
+                                <>
+                                  <p className={`text-sm font-bold tabular-nums ${
+                                    isCheapest ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-900 dark:text-white"
+                                  }`}>
+                                    ${price.toLocaleString()}
+                                  </p>
+                                  {isCheapest ? (
+                                    <p className="text-xs text-emerald-500 font-medium">Best ✓</p>
+                                  ) : savings != null && savings > 0 ? (
+                                    <p className="text-xs text-zinc-400 tabular-nums">+${savings.toLocaleString()} vs best</p>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <p className="text-xs text-zinc-400">Not scanned yet</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* All flight options */}

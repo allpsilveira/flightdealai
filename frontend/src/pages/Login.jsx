@@ -25,7 +25,18 @@ export default function Login() {
       else await register(email, password, language);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail ?? "Something went wrong. Please try again.");
+      if (!err.response) {
+        setError(`Network error — backend unreachable (${err.message})`);
+      } else {
+        const detail = err.response.data?.detail;
+        if (typeof detail === "string") {
+          setError(detail);
+        } else if (Array.isArray(detail)) {
+          setError(detail.map((d) => d.msg ?? JSON.stringify(d)).join(" · "));
+        } else {
+          setError(`HTTP ${err.response.status}: ${JSON.stringify(err.response.data).slice(0, 300)}`);
+        }
+      }
     } finally {
       setLoading(false);
     }
