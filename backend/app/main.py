@@ -6,7 +6,6 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import get_settings
 from app.api import auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks
-from app.services.daily_scheduler import create_scheduler
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -16,14 +15,24 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     logger.info("FlyLuxuryDeals backend starting up")
 
-    # Start daily route scanner (7 AM UTC, all active routes, force_enrich=True)
-    scheduler = create_scheduler(str(settings.database_url))
-    scheduler.start()
-    logger.info("daily_scheduler_started")
+    # Start daily route scanner — wrapped so a missing apscheduler package
+    # (e.g. container not yet rebuilt) never prevents the app from starting.
+    scheduler = None
+    try:
+        from app.services.daily_scheduler import create_scheduler
+        scheduler = create_scheduler(str(settings.database_url))
+        scheduler.start()
+        logger.info("daily_scheduler_started")
+    except Exception as exc:
+        logger.warning("daily_scheduler_unavailable", error=str(exc))
 
     yield
 
-    scheduler.shutdown(wait=False)
+    if scheduler is not None:
+        try:
+            scheduler.shutdown(wait=False)
+        except Exception:
+            pass
     logger.info("FlyLuxuryDeals backend shutting down")
 
 
