@@ -137,13 +137,16 @@ def _compute_best_prices(prices: list[dict]) -> list[dict]:
         key = (r["origin"], r["destination"], r["cabin_class"], str(r["departure_date"]))
         if key not in best or r["price_usd"] < best[key]["price_usd"]:
             best[key] = {
-                "origin":         r["origin"],
-                "destination":    r["destination"],
-                "cabin_class":    r["cabin_class"],
-                "departure_date": str(r["departure_date"]),
-                "price_usd":      r["price_usd"],
-                "price_level":    r.get("price_level"),
-                "airline_codes":  r.get("airline_codes", []),
-                "source":         "serpapi",
+                "origin":              r["origin"],
+                "destination":         r["destination"],
+                "cabin_class":         r["cabin_class"],
+                "departure_date":      str(r["departure_date"]),
+                "price_usd":           r["price_usd"],
+                "price_level":         r.get("price_level"),
+                "typical_price_low":   r.get("typical_price_low"),
+                "typical_price_high":  r.get("typical_price_high"),
+                "airline_codes":       r.get("airline_codes", []),
+                "is_direct":           r.get("is_direct", False),
+                "source":              "serpapi",
             }
     return sorted(best.values(), key=lambda x: x["price_usd"])

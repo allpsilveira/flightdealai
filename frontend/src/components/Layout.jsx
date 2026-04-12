@@ -5,8 +5,7 @@ import clsx from "clsx";
 
 const NAV = [
   { to: "/",         label: "Deal Feed",       icon: <IconDeals /> },
-  { to: "/routes",   label: "Routes",           icon: <IconRoutes /> },
-  { to: "/scans",    label: "Scan History",     icon: <IconScan /> },
+  { to: "/routes",   label: "Monitoring",       icon: <IconScan /> },
   { to: "/prices",   label: "Price History",    icon: <IconChart /> },
   { to: "/airports", label: "Airport Compare",  icon: <IconMap /> },
   { to: "/alerts",   label: "Alerts",           icon: <IconBell /> },

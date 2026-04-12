@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDealsStore } from "../stores/useDeals";
 import { useAuthStore } from "../stores/useAuth";
 import DealCard from "../components/DealCard";
+import DealDetail from "../components/DealDetail";
 
 const CABIN_OPTIONS = ["BUSINESS", "FIRST", "PREMIUM_ECONOMY"];
 const ACTION_OPTIONS = ["STRONG_BUY", "BUY", "WATCH"];
@@ -10,6 +11,7 @@ export default function Dashboard() {
   const { deals, loading, error, filters, setFilter, fetchDeals, addLiveDeal } = useDealsStore();
   const accessToken = useAuthStore((s) => s.accessToken);
   const wsRef = useRef(null);
+  const [selectedDeal, setSelectedDeal] = useState(null);
 
   useEffect(() => { fetchDeals(); }, [filters]);
 
@@ -120,9 +122,13 @@ export default function Dashboard() {
       {/* ── Grid ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         {deals.map((deal) => (
-          <DealCard key={deal.id} deal={deal} />
+          <DealCard key={deal.id} deal={deal} onClick={setSelectedDeal} />
         ))}
       </div>
+
+      {selectedDeal && (
+        <DealDetail deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      )}
     </div>
   );
 }
