@@ -73,7 +73,7 @@ export default function RouteManager() {
             Routes
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Corridors FlightDeal AI monitors for you
+            Corridors FlyLuxuryDeals monitors for you
           </p>
         </div>
         <button onClick={() => { setShowForm(true); setForm(EMPTY_FORM); }} className="btn-primary">

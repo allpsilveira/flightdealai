@@ -38,7 +38,7 @@ export default function Layout() {
             </div>
             <div>
               <span className="text-sm font-semibold text-zinc-900 dark:text-white tracking-tight">
-                FlightDeal<span className="text-brand-500"> AI</span>
+                FlyLuxury<span className="text-brand-500">Deals</span>
               </span>
             </div>
           </div>

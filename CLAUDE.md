@@ -1,4 +1,4 @@
-# CLAUDE.md — FlightDeal AI Project Instructions
+# CLAUDE.md — FlyLuxuryDeals Project Instructions
 
 > Claude Code: Read this file completely before doing anything. This is the master specification.
 
@@ -6,7 +6,7 @@
 
 ## What This Is
 
-FlightDeal AI is a personal luxury travel deal intelligence platform. It monitors Business, First, and Premium Economy class fares across 3 data sources, scores deals using dynamic statistics, compares cash vs award miles, overlays cabin quality context, and delivers recommendations via a beautiful web dashboard + WhatsApp alerts.
+FlyLuxuryDeals is a personal luxury travel deal intelligence platform. It monitors Business, First, and Premium Economy class fares across 3 data sources, scores deals using dynamic statistics, compares cash vs award miles, overlays cabin quality context, and delivers recommendations via a beautiful web dashboard + WhatsApp alerts.
 
 **Owner:** Gabriel — dual US-Brazilian citizen based in Fort Myers, FL. Primary corridor is MIA/MCO/FLL → GRU/CNF but the system supports any route added dynamically through the UI.
 

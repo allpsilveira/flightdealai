@@ -13,13 +13,13 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("FlightDeal AI backend starting up")
+    logger.info("FlyLuxuryDeals backend starting up")
     yield
-    logger.info("FlightDeal AI backend shutting down")
+    logger.info("FlyLuxuryDeals backend shutting down")
 
 
 app = FastAPI(
-    title="FlightDeal AI",
+    title="FlyLuxuryDeals",
     description="Luxury travel deal intelligence platform",
     version="1.0.0",
     lifespan=lifespan,

@@ -84,5 +84,5 @@ def _format_deal_message(deal: dict, rec: str | None, language: str) -> str:
     if rec:
         msg += f"\n{rec}"
 
-    msg += "\n\n_FlightDeal AI_"
+    msg += "\n\n_FlyLuxuryDeals_"
     return msg

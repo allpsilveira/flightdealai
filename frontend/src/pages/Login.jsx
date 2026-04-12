@@ -57,7 +57,7 @@ export default function Login() {
             </svg>
           </div>
           <h1 className="text-xl font-semibold text-zinc-900 dark:text-white tracking-tight">
-            FlightDeal <span className="text-brand-500">AI</span>
+            FlyLuxury<span className="text-brand-500">Deals</span>
           </h1>
           <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-1">
             Business &amp; First Class intelligence

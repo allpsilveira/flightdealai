@@ -1,5 +1,5 @@
 /**
- * FlightDeal AI — Service Worker
+ * FlyLuxuryDeals — Service Worker
  * Handles Web Push notification display and click actions.
  */
 
@@ -10,7 +10,7 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "FlightDeal AI", body: event.data.text() };
+    payload = { title: "FlyLuxuryDeals", body: event.data.text() };
   }
 
   const options = {
@@ -27,7 +27,7 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || "FlightDeal AI", options)
+    self.registration.showNotification(payload.title || "FlyLuxuryDeals", options)
   );
 });
 
