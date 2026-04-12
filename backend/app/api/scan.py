@@ -9,7 +9,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_superuser
+from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.route import Route
 from app.models.user import User
@@ -24,6 +24,8 @@ class ManualScanRequest(BaseModel):
     cabin_classes: list[str]
     date_from:    date
     date_to:      date
+    trip_type:    str = "ONE_WAY"         # ONE_WAY | ROUND_TRIP
+    return_date_offset_days: int | None = 7  # days after departure to return
     include_searchapi: bool = True
 
     @field_validator("cabin_classes")
@@ -49,7 +51,7 @@ class ScanResponse(BaseModel):
 @router.post("/manual", response_model=ScanResponse)
 async def manual_scan(
     req: ManualScanRequest,
-    user: User = Depends(get_current_superuser),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -67,7 +69,9 @@ async def manual_scan(
         date_from=req.date_from,
         date_to=req.date_to,
         db=db,
-        include_searchapi=req.include_searchapi,
+        deep=req.include_searchapi,
+        trip_type=req.trip_type,
+        return_date_offset_days=req.return_date_offset_days,
     )
     return result
 
@@ -76,7 +80,7 @@ async def manual_scan(
 async def scan_saved_route(
     route_id: uuid.UUID,
     include_searchapi: bool = True,
-    user: User = Depends(get_current_superuser),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -96,6 +100,8 @@ async def scan_saved_route(
         date_from=route.date_from,
         date_to=route.date_to,
         db=db,
-        include_searchapi=include_searchapi,
+        deep=include_searchapi,
+        trip_type=getattr(route, "trip_type", "ONE_WAY"),
+        return_date_offset_days=getattr(route, "return_date_offset_days", None),
     )
     return scan_result

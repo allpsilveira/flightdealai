@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import desc, select
@@ -19,14 +19,24 @@ class DealResponse(BaseModel):
     route_id: uuid.UUID
     origin: str
     destination: str
+    departure_date: date
     cabin_class: str
     best_price_usd: float
     best_source: str
+    airline_code: str | None
     score_total: float
+    score_percentile: float
+    score_zscore: float
+    score_trend_direction: float
+    score_cross_source: float
+    score_arbitrage: float
+    score_award: float
     action: str
     is_gem: bool
     is_error_fare: bool
     sources_confirmed: list[str]
+    percentile_position: float | None
+    zscore: float | None
     google_price_level: str | None
     seats_remaining: int | None
     fare_brand_name: str | None

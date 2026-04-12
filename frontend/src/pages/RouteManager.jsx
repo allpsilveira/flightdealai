@@ -14,15 +14,18 @@ const TIER_STYLE  = {
 const EMPTY_FORM = {
   name: "", origins: [], destinations: [], cabin_classes: [],
   date_from: "", date_to: "",
+  trip_type: "ONE_WAY", return_date_offset_days: 7,
 };
 
 export default function RouteManager() {
-  const [routes,  setRoutes]  = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [routes,   setRoutes]   = useState([]);
+  const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form,    setForm]    = useState(EMPTY_FORM);
-  const [saving,  setSaving]  = useState(false);
-  const [error,   setError]   = useState("");
+  const [form,     setForm]     = useState(EMPTY_FORM);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState("");
+  const [scanning, setScanning] = useState({});   // { [route.id]: "scanning" | "done" | "error" }
+  const [scanResult, setScanResult] = useState({});  // { [route.id]: { prices_found, best } }
 
   const fetchRoutes = async () => {
     try {
@@ -63,6 +66,20 @@ export default function RouteManager() {
     if (!confirm("Delete this route?")) return;
     await api.delete(`/routes/${id}`);
     fetchRoutes();
+  };
+
+  const scanRoute = async (route) => {
+    setScanning(s => ({ ...s, [route.id]: "scanning" }));
+    setScanResult(r => ({ ...r, [route.id]: null }));
+    try {
+      const { data } = await api.post(`/scan/route/${route.id}`);
+      const found = data.sources?.serpapi ?? 0;
+      const best  = data.best_prices?.[0];
+      setScanResult(r => ({ ...r, [route.id]: { found, best } }));
+      setScanning(s => ({ ...s, [route.id]: "done" }));
+    } catch {
+      setScanning(s => ({ ...s, [route.id]: "error" }));
+    }
   };
 
   return (
@@ -144,6 +161,22 @@ export default function RouteManager() {
               </div>
             </div>
 
+            <div>
+              <label className="label block mb-2">Trip Type</label>
+              <div className="flex gap-2">
+                {["ONE_WAY", "ROUND_TRIP"].map(t => (
+                  <button type="button" key={t}
+                    onClick={() => setForm(f => ({ ...f, trip_type: t }))}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                      form.trip_type === t
+                        ? "bg-brand-500 text-white border-brand-500"
+                        : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-brand-300"
+                    }`}
+                  >{t === "ONE_WAY" ? "One Way" : "Round Trip"}</button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label block mb-1.5">Date From</label>
@@ -156,6 +189,21 @@ export default function RouteManager() {
                   value={form.date_to} onChange={e => setForm(f => ({ ...f, date_to: e.target.value }))} />
               </div>
             </div>
+
+            {form.trip_type === "ROUND_TRIP" && (
+              <div>
+                <label className="label block mb-1.5">Return after (days)</label>
+                <input
+                  type="number" min="1" max="90"
+                  className="input w-32"
+                  value={form.return_date_offset_days}
+                  onChange={e => setForm(f => ({ ...f, return_date_offset_days: Number(e.target.value) }))}
+                />
+                <p className="text-2xs text-zinc-400 dark:text-zinc-500 mt-1">
+                  How many days after each departure date to set the return
+                </p>
+              </div>
+            )}
 
             {error && (
               <p className="text-xs text-red-600 dark:text-red-400 px-3 py-2 rounded-xl
@@ -224,9 +272,21 @@ export default function RouteManager() {
                         {CABIN_LABEL[c]}
                       </span>
                     ))}
+                    <span className="text-2xs px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                      {route.trip_type === "ROUND_TRIP"
+                        ? `Round Trip · +${route.return_date_offset_days}d`
+                        : "One Way"}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => scanRoute(route)}
+                    disabled={scanning[route.id] === "scanning"}
+                    className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50"
+                  >
+                    {scanning[route.id] === "scanning" ? "Scanning…" : "Scan Now"}
+                  </button>
                   <button onClick={() => toggleActive(route)} className="btn-ghost text-xs py-1.5 px-3">
                     {route.is_active ? "Pause" : "Resume"}
                   </button>
@@ -235,6 +295,32 @@ export default function RouteManager() {
                   </button>
                 </div>
               </div>
+              {scanning[route.id] === "error" && (
+                <p className="mt-3 text-xs text-red-500 dark:text-red-400">
+                  Scan failed — check that SERPAPI_API_KEY is set in EasyPanel.
+                </p>
+              )}
+              {scanning[route.id] === "done" && scanResult[route.id] && (
+                <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span>
+                    <span className="font-semibold text-zinc-900 dark:text-white">
+                      {scanResult[route.id].found}
+                    </span> prices collected
+                  </span>
+                  {scanResult[route.id].best && (
+                    <span>
+                      Best: <span className="font-semibold text-brand-500">
+                        ${scanResult[route.id].best.price_usd?.toLocaleString()}
+                      </span>{" "}
+                      {scanResult[route.id].best.origin}→{scanResult[route.id].best.destination}{" "}
+                      {scanResult[route.id].best.cabin_class?.replace("_", " ")}
+                    </span>
+                  )}
+                  {scanResult[route.id].found === 0 && (
+                    <span className="text-amber-500">No prices returned — SerpApi may need a valid date range.</span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

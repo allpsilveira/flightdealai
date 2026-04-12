@@ -24,6 +24,10 @@ class Route(Base):
     cabin_classes: Mapped[list[str]] = mapped_column(ARRAY(String(20)), nullable=False)
     date_from: Mapped[date] = mapped_column(Date, nullable=False)
     date_to: Mapped[date] = mapped_column(Date, nullable=False)
+    # ONE_WAY | ROUND_TRIP
+    trip_type: Mapped[str] = mapped_column(String(10), default="ONE_WAY", nullable=False)
+    # For round-trips: how many days after departure to return (e.g. 7 = one week)
+    return_date_offset_days: Mapped[int | None] = mapped_column(nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # HOT | WARM | COLD — updated by priority engine
     priority_tier: Mapped[str] = mapped_column(String(10), default="WARM", nullable=False)

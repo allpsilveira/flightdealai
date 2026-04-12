@@ -1,0 +1,17 @@
+{
+  "QR": { "name": "Al Mourjan Business Lounge",     "priority_pass": false, "pp_partner": false },
+  "EK": { "name": "Emirates Business Lounge",        "priority_pass": false, "pp_partner": false },
+  "SQ": { "name": "SilverKris Lounge",              "priority_pass": false, "pp_partner": false },
+  "NH": { "name": "ANA Lounge",                     "priority_pass": false, "pp_partner": false },
+  "JL": { "name": "JAL Sakura Lounge",              "priority_pass": false, "pp_partner": false },
+  "CX": { "name": "The Pier Business Class Lounge", "priority_pass": false, "pp_partner": false },
+  "AA": { "name": "Admirals Club",                  "priority_pass": false, "pp_partner": true  },
+  "UA": { "name": "United Club",                    "priority_pass": false, "pp_partner": true  },
+  "DL": { "name": "Delta Sky Club",                 "priority_pass": false, "pp_partner": true  },
+  "LH": { "name": "Lufthansa Business Lounge",      "priority_pass": false, "pp_partner": false },
+  "BA": { "name": "British Airways Lounge",         "priority_pass": false, "pp_partner": false },
+  "LA": { "name": "LATAM VIP Lounge",               "priority_pass": false, "pp_partner": false },
+  "AF": { "name": "Air France Salon",               "priority_pass": false, "pp_partner": false },
+  "TK": { "name": "Turkish Airlines Lounge",        "priority_pass": false, "pp_partner": false },
+  "AZ": { "name": "Alitalia Business Lounge",       "priority_pass": false, "pp_partner": false }
+}

@@ -20,6 +20,8 @@ class RouteCreate(BaseModel):
     cabin_classes: list[str]
     date_from: date
     date_to: date
+    trip_type: str = "ONE_WAY"
+    return_date_offset_days: int | None = None
 
 
 class RouteResponse(BaseModel):
@@ -30,6 +32,8 @@ class RouteResponse(BaseModel):
     cabin_classes: list[str]
     date_from: date
     date_to: date
+    trip_type: str
+    return_date_offset_days: int | None
     is_active: bool
     priority_tier: str
 

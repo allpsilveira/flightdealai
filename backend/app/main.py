@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import get_settings
-from app.api import auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan
+from app.api import auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -30,9 +30,18 @@ app = FastAPI(
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+_cors_origins = [
+    "http://localhost:5173",
+    "http://localhost:80",
+    "https://flyluxurydeals.com",
+    "https://www.flyluxurydeals.com",
+]
+if settings.app_domain and settings.app_domain not in ("flyluxurydeals.com", "www.flyluxurydeals.com"):
+    _cors_origins.append(f"https://{settings.app_domain}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:80", f"https://{settings.app_domain}"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +58,7 @@ app.include_router(cabins.router,   prefix="/api/cabins",   tags=["cabins"])
 app.include_router(alerts.router,   prefix="/api/alerts",   tags=["alerts"])
 app.include_router(ws.router,       prefix="/ws",           tags=["websocket"])
 app.include_router(scan.router,     prefix="/api/scan",     tags=["scan"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 
 
 @app.get("/api/health", tags=["health"])

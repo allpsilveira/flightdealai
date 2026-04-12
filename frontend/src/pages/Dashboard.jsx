@@ -15,7 +15,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!accessToken) return;
-    const wsUrl = `${import.meta.env.VITE_WS_URL ?? "ws://localhost/ws"}/deals?token=${accessToken}`;
+    const defaultWsBase = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
+    const wsUrl = `${import.meta.env.VITE_WS_URL ?? defaultWsBase}/deals?token=${accessToken}`;
     const ws = new WebSocket(wsUrl);
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);

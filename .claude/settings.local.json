@@ -11,7 +11,18 @@
       "WebFetch(domain:serpapi.com)",
       "WebSearch",
       "WebFetch(domain:travelpayouts.github.io)",
-      "WebFetch(domain:docs.seats.aero)"
+      "WebFetch(domain:docs.seats.aero)",
+      "Bash(wc -l dags/*.py dags/tasks/*.py)",
+      "Bash(grep -r \"TODO\\\\|FIXME\\\\|Phase 3\\\\|stub\\\\|pass$\" backend/app/services/*.py backend/app/api/*.py)",
+      "Bash(ls -la frontend/src/components/*.jsx)",
+      "Bash(ls -la frontend/src/pages/*.jsx)",
+      "Bash(ls -la frontend/src/stores/*.js)",
+      "Bash(grep -l \"Phase 3\\\\|TODO\\\\|stub\" frontend/src/pages/*.jsx frontend/src/stores/*.js)",
+      "Bash(grep -n \"await db.commit\" c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/api/*.py)",
+      "Bash(grep -n \"await db.commit\\(\\)\" c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/services/*.py)",
+      "Bash(grep -rn \"import.*from.*components\" c:/Users/caned/flightdeal-ai/flightdeal-ai/frontend/src/pages/*.jsx)",
+      "Bash(sed -n '62,72p' c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/api/scan.py)",
+      "Bash(sed -n '23,32p' c:/Users/caned/flightdeal-ai/flightdeal-ai/backend/app/services/scanner.py)"
     ]
   }
 }

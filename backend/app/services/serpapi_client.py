@@ -30,16 +30,21 @@ async def search_flights(
     departure_date: date,
     cabin_class: str,
     deep: bool = True,
+    trip_type: str = "ONE_WAY",
+    return_date: date | None = None,
 ) -> dict[str, Any] | None:
     """
     Search Google Flights via SerpApi.
     deep=True fetches price_history and price_level (full scan).
     deep=False is a quick price check (same API cost, but we skip heavy parsing).
+    trip_type: "ONE_WAY" or "ROUND_TRIP" (requires return_date when round-trip).
     Returns a normalized dict or None on failure.
     """
     if not settings.serpapi_api_key:
         logger.warning("serpapi_no_key")
         return None
+
+    is_round_trip = trip_type == "ROUND_TRIP" and return_date is not None
 
     params = {
         "engine":         "google_flights",
@@ -47,19 +52,21 @@ async def search_flights(
         "departure_id":   origin,
         "arrival_id":     destination,
         "outbound_date":  departure_date.isoformat(),
-        "type":           "2",   # one-way
+        "type":           "1" if is_round_trip else "2",   # 1=round-trip, 2=one-way
         "travel_class":   CABIN_CODE.get(cabin_class, "3"),
         "stops":          "2",
         "currency":       "USD",
         "hl":             "en",
     }
+    if is_round_trip:
+        params["return_date"] = return_date.isoformat()
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(BASE_URL, params=params)
             resp.raise_for_status()
             data = resp.json()
-        return _normalize(data, origin, destination, departure_date, cabin_class, deep=deep)
+        return _normalize(data, origin, destination, departure_date, cabin_class, deep=deep, trip_type=trip_type)
     except Exception as exc:
         logger.warning(
             "serpapi_search_failed",
@@ -76,6 +83,7 @@ def _normalize(
     departure_date: date,
     cabin_class: str,
     deep: bool = True,
+    trip_type: str = "ONE_WAY",
 ) -> dict[str, Any]:
     insights = data.get("price_insights", {})
     typical  = insights.get("typical_price_range", [None, None])
@@ -108,6 +116,7 @@ def _normalize(
         "price_history":      insights.get("price_history") if deep else None,
         "airline_codes":      best_airlines,
         "is_direct":          is_direct,
+        "trip_type":          trip_type,
         "raw_response":       data if deep else None,
     }
 

@@ -1,7 +1,18 @@
 """
 Twilio WhatsApp Business API client.
 Sends deal alerts and weekly briefings.
+
+Sandbox setup (before WhatsApp Business approval):
+  1. Twilio console → Messaging → Try it out → Send a WhatsApp message
+  2. User must text "join <sandbox-keyword>" to +14155238886 first (opt-in)
+  3. Set TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 in env
+
+Production (after approval):
+  1. Twilio console → Messaging → Senders → WhatsApp Senders
+  2. Set TWILIO_WHATSAPP_FROM=whatsapp:+1YOURNUMBER
+  3. Set webhook URL: https://flyluxurydeals.com/api/webhooks/twilio
 """
+import asyncio
 import structlog
 from typing import Any
 
@@ -41,7 +52,9 @@ async def _send(to_number: str, body: str) -> bool:
         from twilio.rest import Client
         client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
         to_wa = f"whatsapp:{to_number}" if not to_number.startswith("whatsapp:") else to_number
-        client.messages.create(
+        # Run sync Twilio SDK in a thread so it doesn't block the async event loop
+        await asyncio.to_thread(
+            client.messages.create,
             from_=settings.twilio_whatsapp_from,
             to=to_wa,
             body=body,

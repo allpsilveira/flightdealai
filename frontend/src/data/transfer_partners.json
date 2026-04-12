@@ -1,0 +1,13 @@
+{
+  "United MileagePlus":         ["Chase UR"],
+  "Air Canada Aeroplan":        ["Chase UR", "Amex MR", "Capital One", "Brex"],
+  "British Airways Avios":      ["Chase UR", "Amex MR", "Capital One"],
+  "Singapore KrisFlyer":        ["Chase UR", "Amex MR"],
+  "Iberia Plus":                ["Chase UR"],
+  "Virgin Atlantic Flying Club":["Chase UR"],
+  "Avianca LifeMiles":          ["Amex MR", "Capital One", "Citi TYP", "Brex"],
+  "Azul TudoAzul":              ["Amex MR"],
+  "GOL Smiles":                 ["Amex MR"],
+  "Qatar Privilege Club":       ["Amex MR", "Citi TYP"],
+  "Turkish Miles&Smiles":       ["Citi TYP"]
+}

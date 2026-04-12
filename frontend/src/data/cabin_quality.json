@@ -1,0 +1,17 @@
+[
+  { "airline_code": "QR", "product_name": "Qsuite",            "quality_score": 98, "seat_type": "suite",       "has_door": true,  "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "NH", "product_name": "The Room",          "quality_score": 95, "seat_type": "suite",       "has_door": true,  "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "JL", "product_name": "JAL Sky Suite III", "quality_score": 96, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "SQ", "product_name": "Business Class",    "quality_score": 94, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "CX", "product_name": "Aria Suite",        "quality_score": 95, "seat_type": "suite",       "has_door": true,  "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "EK", "product_name": "Business Class",    "quality_score": 88, "seat_type": "angled-flat", "has_door": false, "lie_flat": true,  "configuration": "2-3-2" },
+  { "airline_code": "LH", "product_name": "Business Class",    "quality_score": 89, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "2-2-2" },
+  { "airline_code": "AA", "product_name": "Flagship Business", "quality_score": 82, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "UA", "product_name": "Polaris",           "quality_score": 81, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "DL", "product_name": "Delta One",         "quality_score": 79, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "2-2-2" },
+  { "airline_code": "LA", "product_name": "Business",          "quality_score": 74, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "AZ", "product_name": "Business",          "quality_score": 72, "seat_type": "angled-flat", "has_door": false, "lie_flat": true,  "configuration": "2-2-2" },
+  { "airline_code": "AF", "product_name": "Business",          "quality_score": 85, "seat_type": "staggered",   "has_door": false, "lie_flat": true,  "configuration": "2-2-2" },
+  { "airline_code": "BA", "product_name": "Club Suite",        "quality_score": 87, "seat_type": "suite",       "has_door": true,  "lie_flat": true,  "configuration": "1-2-1" },
+  { "airline_code": "TK", "product_name": "Business Class",    "quality_score": 78, "seat_type": "angled-flat", "has_door": false, "lie_flat": true,  "configuration": "2-2-2" }
+]

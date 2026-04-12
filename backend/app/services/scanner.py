@@ -29,6 +29,8 @@ async def scan_route(
     date_to: date,
     db: AsyncSession,
     deep: bool = True,
+    trip_type: str = "ONE_WAY",
+    return_date_offset_days: int | None = None,
 ) -> dict[str, Any]:
     """
     Scan a route via SerpApi (Google Flights).
@@ -52,7 +54,12 @@ async def scan_route(
 
     # Build tasks: one SerpApi call per (origin × dest × cabin × date)
     tasks = [
-        _run_serpapi(route_id, origin, dest, dep_date, cabin, db, deep=deep)
+        _run_serpapi(
+            route_id, origin, dest, dep_date, cabin, db,
+            deep=deep,
+            trip_type=trip_type,
+            return_date_offset_days=return_date_offset_days,
+        )
         for origin in origins
         for dest in destinations
         for cabin in cabin_classes
@@ -92,8 +99,17 @@ async def _run_serpapi(
     cabin: str,
     db: AsyncSession,
     deep: bool = True,
+    trip_type: str = "ONE_WAY",
+    return_date_offset_days: int | None = None,
 ) -> dict | None:
-    price = await serpapi_client.search_flights(origin, dest, dep_date, cabin, deep=deep)
+    from datetime import timedelta
+    return_date = (dep_date + timedelta(days=return_date_offset_days)) if (
+        trip_type == "ROUND_TRIP" and return_date_offset_days
+    ) else None
+    price = await serpapi_client.search_flights(
+        origin, dest, dep_date, cabin,
+        deep=deep, trip_type=trip_type, return_date=return_date,
+    )
     if price and price.get("price_usd", 0) > 0:
         await store_google_price(route_id, price, db)
     return {"price": price}

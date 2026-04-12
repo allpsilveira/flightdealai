@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import axios from "axios";
-
-const BASE = import.meta.env.VITE_API_URL ?? "/api";
+import api from "../lib/api";
 
 export const useAuthStore = create(
   persist(
@@ -12,19 +10,18 @@ export const useAuthStore = create(
       user: null,
 
       login: async (email, password) => {
-        const { data } = await axios.post(`${BASE}/auth/login`, { email, password });
+        const { data } = await api.post("/auth/login", { email, password });
         set({ accessToken: data.access_token, refreshToken: data.refresh_token });
-        // Fetch user profile
-        const me = await axios.get(`${BASE}/auth/me`, {
+        const me = await api.get("/auth/me", {
           headers: { Authorization: `Bearer ${data.access_token}` },
         });
         set({ user: me.data });
       },
 
       register: async (email, password, language = "en") => {
-        const { data } = await axios.post(`${BASE}/auth/register`, { email, password, language });
+        const { data } = await api.post("/auth/register", { email, password, language });
         set({ accessToken: data.access_token, refreshToken: data.refresh_token });
-        const me = await axios.get(`${BASE}/auth/me`, {
+        const me = await api.get("/auth/me", {
           headers: { Authorization: `Bearer ${data.access_token}` },
         });
         set({ user: me.data });
@@ -33,7 +30,7 @@ export const useAuthStore = create(
       refresh: async () => {
         const token = get().refreshToken;
         if (!token) throw new Error("No refresh token");
-        const { data } = await axios.post(`${BASE}/auth/refresh`, { refresh_token: token });
+        const { data } = await api.post("/auth/refresh", { refresh_token: token });
         set({ accessToken: data.access_token, refreshToken: data.refresh_token });
       },
 
