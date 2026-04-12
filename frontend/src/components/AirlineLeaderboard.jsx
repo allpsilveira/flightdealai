@@ -101,11 +101,12 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
         const overBy = i > 0 ? Math.round(offer.price_usd - cheapest) : null;
 
         // Both links: Google Flights (generic search) + Skyscanner (date-specific deep link)
-        const depDate = offer.departure_date ? new Date(offer.departure_date + "T12:00:00") : null;
-        const depFormatted = depDate ? depDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
         const dateStr = offer.departure_date?.replace(/-/g, "") ?? null;
+        const depLabel = offer.departure_date
+          ? new Date(offer.departure_date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+          : "";
         const gfUrl = offer.origin && offer.destination
-          ? `https://www.google.com/travel/flights?q=${encodeURIComponent(`${name} flights ${offer.origin} to ${offer.destination}${depFormatted ? " " + depFormatted : ""}`)}`
+          ? `https://www.google.com/travel/flights?q=${encodeURIComponent(`${name} flights ${offer.origin} to ${offer.destination}${depLabel ? " " + depLabel : ""}`)}`
           : null;
         const skyScanUrl = offer.origin && offer.destination && dateStr
           ? `https://www.skyscanner.com/transport/flights/${offer.origin.toLowerCase()}/${offer.destination.toLowerCase()}/${dateStr}/?cabin_class=business&adultsv2=1`
@@ -153,9 +154,9 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
                     {fmtMins(offer.duration_minutes)}
                   </span>
                 )}
-                {depDate && (
+                {offer.departure_date && (
                   <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                    {format(depDate, "d MMM")}
+                    {format(new Date(offer.departure_date + "T12:00:00"), "d MMM")}
                   </span>
                 )}
               </div>
