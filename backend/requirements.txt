@@ -37,4 +37,4 @@ python-dotenv==1.0.1
 structlog==24.1.0
 numpy==1.26.4
 orjson==3.10.3
-apscheduler==3.10.4        # Daily route scan scheduler
+apscheduler>=3.9.1,<4.0    # Daily route scan scheduler (3.x API)
