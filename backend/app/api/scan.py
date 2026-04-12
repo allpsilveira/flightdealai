@@ -6,7 +6,7 @@ force_enrich=False → 4h background tripwire: SerpApi only, no enrichment
 """
 import uuid
 from datetime import date, datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession

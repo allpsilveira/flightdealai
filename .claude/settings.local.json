@@ -29,7 +29,9 @@
       "Bash(powershell -Command \"Get-Command docker -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
       "Bash(powershell -Command \"Get-Command docker 2>&1\")",
       "Bash(powershell -Command \"Test-Path 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\resources\\\\bin\\\\docker.exe'\")",
-      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Program Files\\\\Docker' -Recurse -Filter 'docker.exe' -ErrorAction SilentlyContinue | Select-Object FullName\")"
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Program Files\\\\Docker' -Recurse -Filter 'docker.exe' -ErrorAction SilentlyContinue | Select-Object FullName\")",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)"
     ]
   }
 }
