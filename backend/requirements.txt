@@ -20,17 +20,17 @@ pydantic-settings==2.3.0
 
 # ── HTTP clients ─────────────────────────────────────────────────────────────
 httpx==0.27.0
-aiohttp==3.9.5
 
 # ── Data sources ─────────────────────────────────────────────────────────────
-amadeus==9.0.0
-duffel-api==0.6.0
+duffel-api==0.6.0          # Duffel — on-demand fare brand enrichment
 
 # ── AI ────────────────────────────────────────────────────────────────────────
 anthropic==0.28.0
 
 # ── Alerts ───────────────────────────────────────────────────────────────────
 twilio==9.1.0
+pywebpush==1.20.0          # Web Push (VAPID) browser notifications
+py-vapid==1.9.3            # VAPID key generation helper
 
 # ── Utilities ────────────────────────────────────────────────────────────────
 redis[asyncio]==5.0.4

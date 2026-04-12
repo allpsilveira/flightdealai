@@ -74,7 +74,49 @@ def _normalize(offer: Any, origin: str, destination: str,
     cabin_  = segment.passengers[0] if segment and segment.passengers else None
 
     conditions = getattr(offer, "conditions", None) or {}
-    refundable = getattr(conditions, "refund_before_departure", None)
+
+    # Refundability
+    refund_cond  = getattr(conditions, "refund_before_departure", None)
+    is_refundable = None
+    if refund_cond is not None:
+        is_refundable = getattr(refund_cond, "allowed", None)
+
+    # Change fee — Duffel returns penalty as amount + currency
+    change_cond  = getattr(conditions, "change_before_departure", None)
+    change_fee   = None
+    if change_cond is not None:
+        penalty = getattr(change_cond, "penalty_amount", None)
+        if penalty:
+            try:
+                change_fee = float(penalty)
+            except (TypeError, ValueError):
+                pass
+
+    # Cancellation penalty
+    cancel_cond  = getattr(conditions, "refund_before_departure", None)
+    cancel_fee   = None
+    if cancel_cond is not None:
+        penalty = getattr(cancel_cond, "penalty_amount", None)
+        if penalty:
+            try:
+                cancel_fee = float(penalty)
+            except (TypeError, ValueError):
+                pass
+
+    # Baggage — check available_services for checked bag inclusion
+    services  = getattr(offer, "available_services", []) or []
+    has_bag   = any(
+        getattr(s, "type", "") == "baggage" and getattr(s, "total_amount", "0") == "0"
+        for s in services
+    )
+
+    # Booking class letter — first char of fare_basis_code (e.g. "ZBRAIN1" → "Z")
+    fare_basis  = getattr(cabin_, "fare_basis_code", None)
+    booking_cls = fare_basis[0].upper() if fare_basis else None
+
+    # Airline IATA code
+    carrier = getattr(segment, "marketing_carrier", None) if segment else None
+    airline = getattr(carrier, "iata_code", None) if carrier else None
 
     return {
         "origin":                    origin,
@@ -83,13 +125,13 @@ def _normalize(offer: Any, origin: str, destination: str,
         "cabin_class":               cabin_class,
         "price_usd":                 float(offer.total_amount),
         "fare_brand_name":           getattr(cabin_, "fare_brand_name", None),
-        "fare_basis_code":           getattr(cabin_, "fare_basis_code", None),
+        "fare_basis_code":           fare_basis,
+        "booking_class":             booking_cls,
         "expires_at":                getattr(offer, "expires_at", None),
-        "is_refundable":             bool(refundable) if refundable is not None else None,
-        "change_fee_usd":            None,   # extracted from conditions in Phase 3
-        "cancellation_penalty_usd":  None,
-        "baggage_included":          False,  # Phase 3 — parse available_services
-        "airline_codes":             [getattr(segment, "marketing_carrier", {}).get("iata_code")]
-                                     if segment else [],
+        "is_refundable":             is_refundable,
+        "change_fee_usd":            change_fee,
+        "cancellation_penalty_usd":  cancel_fee,
+        "baggage_included":          has_bag,
+        "airline_codes":             [airline] if airline else [],
         "raw_response":              {"offer_id": offer.id, "total": offer.total_amount},
     }
