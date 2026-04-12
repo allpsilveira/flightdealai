@@ -29,8 +29,7 @@ anthropic==0.28.0
 
 # ── Alerts ───────────────────────────────────────────────────────────────────
 twilio==9.1.0
-pywebpush==1.20.0          # Web Push (VAPID) browser notifications
-py-vapid==1.9.3            # VAPID key generation helper
+pywebpush==2.0.0           # Web Push (VAPID) browser notifications
 
 # ── Utilities ────────────────────────────────────────────────────────────────
 redis[asyncio]==5.0.4

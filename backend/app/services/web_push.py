@@ -36,19 +36,16 @@ async def send_push_notification(
     payload = _build_payload(deal, recommendation, language)
 
     try:
-        from pywebpush import webpush, WebPushException
-        webpush(
-            subscription_info=subscription,
-            data=json.dumps(payload),
-            vapid_private_key=settings.vapid_private_key,
-            vapid_claims={
-                "sub": f"mailto:{settings.vapid_claim_email}",
-            },
+        from pywebpush import Webpush, WebpushException
+        wp = Webpush(
+            public_key=settings.vapid_public_key,
+            private_key=settings.vapid_private_key,
+            subscriber=f"mailto:{settings.vapid_claim_email}",
         )
+        wp.send(json.dumps(payload), subscription)
         logger.info("web_push_sent", endpoint=subscription.get("endpoint", "")[:40])
         return True
     except Exception as exc:
-        # 404/410 = subscription expired — caller should remove it
         logger.warning("web_push_failed", error=str(exc))
         return False
 
