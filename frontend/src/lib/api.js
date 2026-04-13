@@ -3,7 +3,7 @@ import { useAuthStore } from "../stores/useAuth";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "/api",
-  timeout: 15_000,
+  timeout: 120_000,   // 120s — scans on large routes can take 60-90s
 });
 
 // Attach access token

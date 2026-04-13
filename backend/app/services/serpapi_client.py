@@ -8,6 +8,7 @@ Every scan returns:
 
 Runs every 4h for quick price checks and 3x/day for full trend scans.
 """
+import asyncio
 import structlog
 import httpx
 from datetime import date
@@ -17,6 +18,10 @@ from app.config import get_settings
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
+
+# Limit concurrent SerpApi requests to avoid 429 rate limiting.
+# SerpApi allows ~5 req/s on the Starter plan; 3 concurrent is safe.
+_SEMAPHORE = asyncio.Semaphore(3)
 
 BASE_URL = "https://serpapi.com/search"
 
@@ -77,10 +82,11 @@ async def search_flights(
         params["return_date"] = return_date.isoformat()
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(BASE_URL, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        async with _SEMAPHORE:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(BASE_URL, params=params)
+                resp.raise_for_status()
+                data = resp.json()
         return _normalize(data, origin, destination, departure_date, cabin_class, deep=deep, trip_type=trip_type)
     except Exception as exc:
         logger.warning(

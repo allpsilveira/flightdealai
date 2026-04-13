@@ -135,7 +135,7 @@ async def scan_route(
       all_offers:  dict keyed by (origin, dest, cabin, date_str) →
                    list of individual offers per airline+stops
     """
-    scan_dates = _date_range(date_from, date_to, max_dates=5)
+    scan_dates = _date_range(date_from, date_to, max_dates=3)
 
     results: dict[str, Any] = {
         "route_id":      str(route_id),
