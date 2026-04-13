@@ -6,6 +6,7 @@ import transferPartners from "../data/transfer_partners.json";
 import loungeAccess from "../data/lounge_access.json";
 import allAirports from "../data/airports.json";
 import AirportComparisonMap from "./AirportComparisonMap";
+import FormattedText from "./FormattedText";
 
 const airportMap = Object.fromEntries(allAirports.map((a) => [a.iata, a]));
 
@@ -60,53 +61,6 @@ const fmtMins = (mins) => {
   const m = mins % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
-
-// Renders AI text with basic markdown: **bold**, bullet lists, paragraphs
-function FormattedText({ text, className = "" }) {
-  if (!text) return null;
-  const paragraphs = text.split(/\n\n+/).filter(Boolean);
-  return (
-    <div className={`space-y-2 ${className}`}>
-      {paragraphs.map((para, pi) => {
-        const lines = para.split(/\n/).filter(Boolean);
-        const isList = lines.every((l) => /^[-•*]\s/.test(l));
-        if (isList) {
-          return (
-            <ul key={pi} className="space-y-1 pl-4">
-              {lines.map((line, li) => (
-                <li key={li} className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed list-disc">
-                  <InlineFormatted text={line.replace(/^[-•*]\s+/, "")} />
-                </li>
-              ))}
-            </ul>
-          );
-        }
-        return (
-          <p key={pi} className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-            <InlineFormatted text={para} />
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-function InlineFormatted({ text }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith("**") && part.endsWith("**") ? (
-          <strong key={i} className="font-semibold text-zinc-800 dark:text-zinc-100">
-            {part.slice(2, -2)}
-          </strong>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </>
-  );
-}
 
 const ScoreRow = ({ label, value, max, description }) => {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;

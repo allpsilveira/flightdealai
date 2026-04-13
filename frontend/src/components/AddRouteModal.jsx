@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoutesStore } from "../stores/useRoutes";
-import allAirports from "../data/airports.json";
+import api from "../lib/api";
+import popularAirports from "../data/airports.json";
 
-const AIRPORT_MAP = Object.fromEntries(allAirports.map((a) => [a.iata, a]));
+const POPULAR_MAP = Object.fromEntries(popularAirports.map((a) => [a.iata, a]));
 
 const CABINS = [
   { value: "BUSINESS",        label: "Business" },
@@ -37,8 +38,7 @@ const EMPTY = {
   date_to: "",
 };
 
-function AirportRow({ code, selected, onClick, label }) {
-  const ap = AIRPORT_MAP[code];
+function AirportRow({ airport, selected, onClick }) {
   return (
     <button
       type="button"
@@ -52,10 +52,11 @@ function AirportRow({ code, selected, onClick, label }) {
       <span className={`text-sm font-bold tabular-nums w-10 flex-shrink-0 ${
         selected ? "text-brand-600 dark:text-brand-400" : "text-zinc-900 dark:text-white"
       }`}>
-        {code}
+        {airport.iata}
       </span>
       <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-        {label ?? (ap ? `${ap.city}, ${ap.country}` : "Custom airport code")}
+        {airport.city}{airport.country ? `, ${airport.country}` : ""}
+        {airport.name ? ` — ${airport.name}` : ""}
       </span>
       {selected && (
         <span className="ml-auto text-brand-500 text-xs font-bold flex-shrink-0">✓</span>
@@ -66,20 +67,46 @@ function AirportRow({ code, selected, onClick, label }) {
 
 function AirportPicker({ selected, onToggle }) {
   const [query, setQuery] = useState("");
-  const q = query.trim().toUpperCase();
+  const [results, setResults] = useState(popularAirports.slice(0, 30));
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
 
-  const filtered = useMemo(() => {
-    if (!q) return allAirports.slice(0, 30);
-    return allAirports.filter((a) =>
-      a.iata.includes(q) ||
-      a.city.toUpperCase().includes(q) ||
-      a.name.toUpperCase().includes(q) ||
-      (a.country && a.country.toUpperCase().includes(q))
-    ).slice(0, 20);
-  }, [q]);
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults(popularAirports.slice(0, 30));
+      return;
+    }
+    // Debounce API search by 250ms
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const { data } = await api.get("/airports/search", { params: { q } });
+        setResults(data);
+      } catch {
+        // Fallback: filter popular list locally
+        const qUp = q.toUpperCase();
+        setResults(
+          popularAirports.filter((a) =>
+            a.iata.includes(qUp) ||
+            a.city.toUpperCase().includes(qUp) ||
+            a.name.toUpperCase().includes(qUp)
+          ).slice(0, 20)
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
 
-  // Allow custom IATA if exactly 3 letters and not in DB
-  const customCode = q.length === 3 && /^[A-Z]{3}$/.test(q) && !AIRPORT_MAP[q] ? q : null;
+  // Allow raw IATA entry if exactly 3 letters and not in results
+  const qUp = query.trim().toUpperCase();
+  const hasResult = results.some((a) => a.iata === qUp);
+  const customEntry = qUp.length === 3 && /^[A-Z]{3}$/.test(qUp) && !hasResult
+    ? { iata: qUp, name: "Custom code — enter manually", city: "", country: "" }
+    : null;
 
   return (
     <div>
@@ -87,40 +114,45 @@ function AirportPicker({ selected, onToggle }) {
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search city, airport or IATA code…"
+        placeholder="Type city, airport name or IATA code…"
         className="input mb-2 text-sm"
         autoFocus
       />
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {selected.map((code) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => onToggle(code)}
-              className="px-2.5 py-1 rounded-lg bg-brand-500 text-white text-xs font-bold flex items-center gap-1.5"
-            >
-              {code} <span className="opacity-70">✕</span>
-            </button>
-          ))}
+          {selected.map((code) => {
+            const ap = POPULAR_MAP[code] ?? { iata: code, city: code };
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={() => onToggle(code)}
+                className="px-2.5 py-1 rounded-lg bg-brand-500 text-white text-xs font-bold flex items-center gap-1.5"
+                title={ap.name ?? code}
+              >
+                {code} <span className="opacity-70">✕</span>
+              </button>
+            );
+          })}
         </div>
       )}
       <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
-        {filtered.map((a) => (
-          <AirportRow key={a.iata} code={a.iata}
-            label={`${a.city}, ${a.country} — ${a.name}`}
+        {loading && (
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center py-3">Searching…</p>
+        )}
+        {!loading && results.map((a) => (
+          <AirportRow key={a.iata} airport={a}
             selected={selected.includes(a.iata)}
             onClick={() => onToggle(a.iata)} />
         ))}
-        {customCode && (
-          <AirportRow code={customCode}
-            label="Custom airport code (not in database)"
-            selected={selected.includes(customCode)}
-            onClick={() => onToggle(customCode)} />
+        {customEntry && (
+          <AirportRow airport={customEntry}
+            selected={selected.includes(customEntry.iata)}
+            onClick={() => onToggle(customEntry.iata)} />
         )}
-        {filtered.length === 0 && !customCode && (
+        {!loading && results.length === 0 && !customEntry && (
           <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center py-4">
-            No airports found. Type a 3-letter IATA code to add it directly.
+            No airports found. Type a valid 3-letter IATA code to add directly.
           </p>
         )}
       </div>

@@ -11,6 +11,7 @@ import { useRoutesStore } from "../stores/useRoutes";
 import ActivityTimeline from "../components/ActivityTimeline";
 import AirlineLeaderboard from "../components/AirlineLeaderboard";
 import TicketDetailPanel from "../components/TicketDetailPanel";
+import FormattedText from "../components/FormattedText";
 
 const CABIN_LABEL = {
   BUSINESS: "Business",
@@ -377,9 +378,7 @@ export default function RouteDetail() {
               <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
                 AI Analysis
               </p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                {bestDeal.ai_recommendation_en}
-              </p>
+              <FormattedText text={bestDeal.ai_recommendation_en} />
             </div>
           )}
 
