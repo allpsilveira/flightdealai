@@ -12,12 +12,43 @@ import ActivityTimeline from "../components/ActivityTimeline";
 import AirlineLeaderboard from "../components/AirlineLeaderboard";
 import TicketDetailPanel from "../components/TicketDetailPanel";
 import FormattedText from "../components/FormattedText";
+import popularAirports from "../data/airports.json";
+
+const AIRPORT_MAP = Object.fromEntries(popularAirports.map((a) => [a.iata, a]));
 
 const CABIN_LABEL = {
   BUSINESS: "Business",
   FIRST: "First Class",
   PREMIUM_ECONOMY: "Premium Economy",
 };
+
+const CABIN_COLOR = {
+  BUSINESS:        "bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300",
+  FIRST:           "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300",
+  PREMIUM_ECONOMY: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
+};
+
+/** "MIA" → "Miami" if known, otherwise "MIA" */
+function cityName(iata) {
+  return AIRPORT_MAP[iata]?.city ?? iata;
+}
+
+/** Format list of IATA codes as "City · City · City" with IATA tooltip */
+function AirportList({ codes }) {
+  return (
+    <span className="inline-flex flex-wrap gap-x-2 gap-y-0.5">
+      {codes.map((code, i) => (
+        <span key={code} className="inline-flex items-center gap-1">
+          {i > 0 && <span className="text-zinc-400 dark:text-zinc-600 select-none">·</span>}
+          <span title={code} className="font-medium text-zinc-800 dark:text-zinc-100">
+            {cityName(code)}
+          </span>
+          <span className="text-zinc-400 dark:text-zinc-500 text-2xs tabular-nums">({code})</span>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -145,39 +176,68 @@ export default function RouteDetail() {
       {/* ── Route header ──────────────────────────────────────────────── */}
       <div className="px-6 sm:px-8 py-5 border-b border-zinc-200 dark:border-zinc-800
                       bg-white dark:bg-zinc-900 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+        <div className="min-w-0 flex-1">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => navigate("/")}
-              className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors text-sm"
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-xs font-medium"
             >
               ← Home
             </button>
-            <span className="text-zinc-300 dark:text-zinc-700">/</span>
-            <span className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
+            <span className="text-zinc-300 dark:text-zinc-700 text-xs">/</span>
+            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 truncate">
               {route?.name ?? "Loading…"}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {route ? (
-              <>
-                {route.origins.join(", ")} → {route.destinations.join(", ")}
-                {" · "}{route.cabin_classes.map((c) => CABIN_LABEL[c] ?? c).join(", ")}
-                {" · "}
-                {route.date_from && route.date_to
-                  ? `${format(new Date(route.date_from), "d MMM")} – ${format(new Date(route.date_to), "d MMM yyyy")}`
-                  : ""}
-              </>
-            ) : ""}
-          </p>
-          {meta && !meta.error && meta.time && (
-            <p className="text-2xs text-zinc-400 dark:text-zinc-500 mt-0.5">
-              Last scan {formatDistanceToNow(meta.time, { addSuffix: true })}
-              {" · "}{meta.scored ?? 0} deals scored
-            </p>
-          )}
-          {meta?.error && (
-            <p className="text-2xs text-red-500 mt-0.5">Last scan failed</p>
+
+          {route ? (
+            <>
+              {/* Origins → Destinations */}
+              <div className="flex items-start gap-3 flex-wrap mb-2.5">
+                <div className="min-w-0">
+                  <p className="text-2xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">From</p>
+                  <AirportList codes={route.origins} />
+                </div>
+                <span className="text-xl text-zinc-300 dark:text-zinc-600 mt-4 flex-shrink-0">→</span>
+                <div className="min-w-0">
+                  <p className="text-2xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">To</p>
+                  <AirportList codes={route.destinations} />
+                </div>
+              </div>
+
+              {/* Cabin badges + date range */}
+              <div className="flex items-center flex-wrap gap-1.5">
+                {route.cabin_classes.map((c) => (
+                  <span key={c} className={`text-2xs font-semibold px-2 py-0.5 rounded-full ${CABIN_COLOR[c] ?? "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+                    {CABIN_LABEL[c] ?? c}
+                  </span>
+                ))}
+                {route.date_from && route.date_to && (
+                  <span className="text-2xs text-zinc-500 dark:text-zinc-400 ml-1">
+                    📅 {format(new Date(route.date_from + "T12:00:00"), "d MMM")} – {format(new Date(route.date_to + "T12:00:00"), "d MMM yyyy")}
+                  </span>
+                )}
+              </div>
+
+              {/* Scan status */}
+              <div className="mt-1.5">
+                {meta && !meta.error && meta.time && (
+                  <p className="text-2xs text-zinc-400 dark:text-zinc-500">
+                    Last scan {formatDistanceToNow(meta.time, { addSuffix: true })}
+                    {" · "}
+                    <span className={meta.scored > 0 ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
+                      {meta.scored ?? 0} deal{meta.scored !== 1 ? "s" : ""} scored
+                    </span>
+                  </p>
+                )}
+                {meta?.error && (
+                  <p className="text-2xs text-red-500 font-medium">⚠ Last scan failed</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="h-12 w-64 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse" />
           )}
         </div>
 
