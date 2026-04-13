@@ -81,20 +81,32 @@ async def search_flights(
     if is_round_trip:
         params["return_date"] = return_date.isoformat()
 
-    try:
-        async with _SEMAPHORE:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(BASE_URL, params=params)
-                resp.raise_for_status()
-                data = resp.json()
-        return _normalize(data, origin, destination, departure_date, cabin_class, deep=deep, trip_type=trip_type)
-    except Exception as exc:
-        logger.warning(
-            "serpapi_search_failed",
-            origin=origin, destination=destination,
-            date=str(departure_date), cabin=cabin_class, error=str(exc),
-        )
-        return None
+    for attempt in range(3):
+        try:
+            async with _SEMAPHORE:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.get(BASE_URL, params=params)
+                    if resp.status_code == 429:
+                        wait = 2 ** attempt  # 1s, 2s, 4s
+                        logger.warning("serpapi_rate_limited", attempt=attempt + 1,
+                                       wait_s=wait, origin=origin, destination=destination)
+                        await asyncio.sleep(wait)
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+            return _normalize(data, origin, destination, departure_date, cabin_class, deep=deep, trip_type=trip_type)
+        except httpx.HTTPStatusError:
+            pass  # handled above or will be caught below
+        except Exception as exc:
+            logger.warning(
+                "serpapi_search_failed",
+                origin=origin, destination=destination,
+                date=str(departure_date), cabin=cabin_class, error=str(exc),
+            )
+            return None
+    logger.warning("serpapi_all_retries_failed", origin=origin, destination=destination,
+                   date=str(departure_date), cabin=cabin_class)
+    return None
 
 
 def _normalize(
