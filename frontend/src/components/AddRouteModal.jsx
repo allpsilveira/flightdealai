@@ -17,15 +17,7 @@ const TRIP_TYPES = [
   { value: "MONITOR",    label: "Monitor both ★", desc: "Outbound + return tracked separately (recommended)" },
 ];
 
-const DRIVE_OPTIONS = [
-  { value: 0,   label: "No driving",          desc: "Fly only from selected airports", radius: null },
-  { value: 1,   label: "Up to 1 hour",         desc: "~80 km radius — nearby cities",   radius: "~80 km" },
-  { value: 2,   label: "Up to 2 hours ★",      desc: "~150 km radius — recommended",    radius: "~150 km" },
-  { value: 3,   label: "Up to 3 hours",         desc: "~230 km radius — wider region",   radius: "~230 km" },
-  { value: 4,   label: "Up to 4 hours",         desc: "~300 km radius — large metro area", radius: "~300 km" },
-];
-
-const STEPS = ["Origins", "Destinations", "Trip Type", "Cabin", "Drive Range", "Dates"];
+const STEPS = ["Origin", "Destinations", "Trip Type", "Cabin", "Dates"];
 
 const EMPTY = {
   name: "",
@@ -33,7 +25,6 @@ const EMPTY = {
   destinations: [],
   trip_type: "MONITOR",
   cabin_classes: [],
-  max_drive_hours: 2,
   date_from: "",
   date_to: "",
 };
@@ -65,7 +56,7 @@ function AirportRow({ airport, selected, onClick }) {
   );
 }
 
-function AirportPicker({ selected, onToggle }) {
+function AirportPicker({ selected, onToggle, single = false }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(popularAirports.slice(0, 30));
   const [loading, setLoading] = useState(false);
@@ -130,7 +121,7 @@ function AirportPicker({ selected, onToggle }) {
                 className="px-2.5 py-1 rounded-lg bg-brand-500 text-white text-xs font-bold flex items-center gap-1.5"
                 title={ap.name ?? code}
               >
-                {code} <span className="opacity-70">✕</span>
+                {code} {!single && <span className="opacity-70">✕</span>}
               </button>
             );
           })}
@@ -175,13 +166,16 @@ export default function AddRouteModal({ onClose }) {
         : [...f[key], value],
     }));
 
+  // Single-select: replace instead of toggle
+  const selectOne = (key, value) =>
+    setForm((f) => ({ ...f, [key]: [value] }));
+
   const canAdvance = () => {
     if (step === 0) return form.origins.length > 0;
     if (step === 1) return form.destinations.length > 0;
     if (step === 2) return !!form.trip_type;
     if (step === 3) return form.cabin_classes.length > 0;
-    if (step === 4) return form.max_drive_hours != null;
-    if (step === 5) return form.date_from && form.date_to;
+    if (step === 4) return form.date_from && form.date_to;
     return true;
   };
 
@@ -190,11 +184,7 @@ export default function AddRouteModal({ onClose }) {
     const name = form.name.trim() ||
       `${form.origins.join("/")} → ${form.destinations.join("/")}`;
     try {
-      await createRoute({
-        ...form,
-        name,
-        max_drive_hours: form.max_drive_hours > 0 ? form.max_drive_hours : null,
-      });
+      await createRoute({ ...form, name });
       onClose();
     } catch (err) {
       setError(err.response?.data?.detail ?? "Failed to create route.");
@@ -248,15 +238,19 @@ export default function AddRouteModal({ onClose }) {
         {/* Step content */}
         <div className="px-6 pb-6 min-h-[220px]">
 
-          {/* Step 0: Origins */}
+          {/* Step 0: Origin */}
           {step === 0 && (
             <div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-3">
-                Select your departure airport(s) — any city worldwide
+              <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-1">
+                Select your home departure airport
+              </p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-3 leading-snug">
+                Nearby airports within 300 miles (~480 km) will be scanned automatically and compared for you.
               </p>
               <AirportPicker
                 selected={form.origins}
-                onToggle={(code) => toggle("origins", code)}
+                onToggle={(code) => selectOne("origins", code)}
+                single
               />
             </div>
           )}
@@ -315,42 +309,8 @@ export default function AddRouteModal({ onClose }) {
             </div>
           )}
 
-          {/* Step 4: Drive range */}
+          {/* Step 4: Dates */}
           {step === 4 && (
-            <div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-1">
-                How far are you willing to drive to pay less?
-              </p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-3 leading-snug">
-                We'll automatically check nearby airports within your drive range and alert you when they're cheaper to the same destination.
-              </p>
-              <div className="space-y-2">
-                {DRIVE_OPTIONS.map(({ value, label, desc, radius }) => (
-                  <button key={value} type="button"
-                    onClick={() => setForm((f) => ({ ...f, max_drive_hours: value }))}
-                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
-                      form.max_drive_hours === value
-                        ? "bg-brand-50 dark:bg-brand-500/10 border-brand-300 dark:border-brand-500/40"
-                        : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-brand-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className={`text-sm font-medium ${
-                        form.max_drive_hours === value ? "text-brand-700 dark:text-brand-300" : "text-zinc-900 dark:text-white"
-                      }`}>{label}</p>
-                      {radius && (
-                        <span className="text-xs text-zinc-400 tabular-nums">{radius}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 5: Dates */}
-          {step === 5 && (
             <div className="space-y-4">
               <div>
                 <label className="label block mb-1.5">Date From</label>
@@ -374,11 +334,11 @@ export default function AddRouteModal({ onClose }) {
               <div className="px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 space-y-1">
                 <p className="text-xs font-semibold text-zinc-900 dark:text-white mb-2">Summary</p>
                 {[
-                  ["From",   form.origins.join(", ")],
-                  ["To",     form.destinations.join(", ")],
-                  ["Cabin",  form.cabin_classes.map(c => CABINS.find(x => x.value === c)?.label).join(", ")],
-                  ["Type",   TRIP_TYPES.find(t => t.value === form.trip_type)?.label],
-                  ["Drive",  DRIVE_OPTIONS.find(d => d.value === form.max_drive_hours)?.label],
+                  ["From",    form.origins.join(", ")],
+                  ["To",      form.destinations.join(", ")],
+                  ["Cabin",   form.cabin_classes.map(c => CABINS.find(x => x.value === c)?.label).join(", ")],
+                  ["Type",    TRIP_TYPES.find(t => t.value === form.trip_type)?.label],
+                  ["Nearby",  "Airports within 300 miles auto-included"],
                 ].map(([label, val]) => val ? (
                   <p key={label} className="text-xs text-zinc-500 dark:text-zinc-400">
                     <span className="font-medium text-zinc-700 dark:text-zinc-300">{label}:</span>{" "}{val}
