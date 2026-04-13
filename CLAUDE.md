@@ -346,6 +346,14 @@ Route-specific alert overrides live on Route Detail, not here.
 - **Cards:** Frosted glass effect or subtle elevation. Generous whitespace. Never cluttered.
 - **Maps:** Elegant dark-themed map with gold/champagne pins for airports, price labels overlaid.
 
+### Price History Chart — SteamDB as Reference Model
+Gabriel specifically cited **SteamDB** (https://steamdb.info/) as the ideal reference for how price history should be visualized on route charts. Key patterns to emulate:
+- **Historical low marker** — a persistent dotted/dashed line showing the all-time lowest price on record (sourced from `price_daily_stats.min`). Always visible even when zoomed to 30d.
+- **Event annotations on the chart** — vertical markers where significant events occurred (price_drop, new_low, award_opened). Same events as the activity timeline, projected onto the chart timeline axis.
+- **Price floor/ceiling patterns** — Business fares on a given route often repeat cycles (e.g., drops to $2,800 every 6-8 weeks). 180d+ view makes this pattern visible and actionable.
+- **Big sale spikes** — the most valuable signal: when a price drops far below the established floor, it stands out dramatically on the historical chart. This is the "error fare" detection equivalent.
+- The chart is the primary intelligence surface — not just a graph, but a tool for reading timing patterns and knowing when to wait vs. buy now.
+
 ### Pages/Tabs that do NOT exist:
 - No Airport Comparison page (embedded in Level 3 Ticket Detail)
 - No Alert Settings page (merged into Settings; route overrides on Route Detail)
