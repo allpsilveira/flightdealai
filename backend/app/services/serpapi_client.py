@@ -86,17 +86,16 @@ async def search_flights(
             async with _SEMAPHORE:
                 async with httpx.AsyncClient(timeout=30) as client:
                     resp = await client.get(BASE_URL, params=params)
-                    if resp.status_code == 429:
-                        wait = 2 ** attempt  # 1s, 2s, 4s
-                        logger.warning("serpapi_rate_limited", attempt=attempt + 1,
-                                       wait_s=wait, origin=origin, destination=destination)
-                        await asyncio.sleep(wait)
-                        continue
-                    resp.raise_for_status()
-                    data = resp.json()
-            return _normalize(data, origin, destination, departure_date, cabin_class, deep=deep, trip_type=trip_type)
-        except httpx.HTTPStatusError:
-            pass  # handled above or will be caught below
+            # --- semaphore released before any sleep ---
+            if resp.status_code == 429:
+                wait = 2 ** attempt   # 1s → 2s → 4s
+                logger.warning("serpapi_rate_limited", attempt=attempt + 1,
+                               wait_s=wait, origin=origin, destination=destination)
+                await asyncio.sleep(wait)
+                continue              # retry
+            resp.raise_for_status()
+            return _normalize(resp.json(), origin, destination, departure_date,
+                              cabin_class, deep=deep, trip_type=trip_type)
         except Exception as exc:
             logger.warning(
                 "serpapi_search_failed",
