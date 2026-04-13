@@ -113,6 +113,11 @@ def expand_origins_by_drive(
     return expanded
 
 
+# Hard cap: max SerpApi calls per scan to protect the monthly quota.
+# Starter plan = 1,000 searches/month. At 20/scan you can run 50 scans/month.
+MAX_CALLS_PER_SCAN = 20
+
+
 async def scan_route(
     route_id: uuid.UUID,
     origins: list[str],
@@ -130,6 +135,11 @@ async def scan_route(
     deep=True → full scan with price_level + price_history (3x/day)
     deep=False → quick price check only (every 4h tripwire)
 
+    Total SerpApi calls = origins × destinations × cabins × dates, capped at
+    MAX_CALLS_PER_SCAN to protect the monthly quota. When over cap, dates are
+    reduced to 1 first, then (origin, destination) pairs are trimmed keeping
+    the first origin (user's primary airport) as priority.
+
     Returns:
       best_prices: list of cheapest overall per (origin, dest, cabin, date)
       all_offers:  dict keyed by (origin, dest, cabin, date_str) →
@@ -137,10 +147,38 @@ async def scan_route(
     """
     scan_dates = _date_range(date_from, date_to, max_dates=3)
 
+    # ── Quota protection: cap total API calls ────────────────────────────────
+    all_od_pairs = [(o, d) for o in origins for d in destinations]
+    total = len(all_od_pairs) * len(cabin_classes) * len(scan_dates)
+
+    if total > MAX_CALLS_PER_SCAN:
+        # Step 1: reduce to 1 date (midpoint)
+        scan_dates = [scan_dates[len(scan_dates) // 2]]
+        total = len(all_od_pairs) * len(cabin_classes) * len(scan_dates)
+
+    if total > MAX_CALLS_PER_SCAN:
+        # Step 2: trim origin-dest pairs — first origin (primary airport) gets priority
+        max_pairs = max(1, MAX_CALLS_PER_SCAN // len(cabin_classes))
+        all_od_pairs = all_od_pairs[:max_pairs]
+        total = len(all_od_pairs) * len(cabin_classes) * len(scan_dates)
+
+    effective_origins = list(dict.fromkeys(o for o, d in all_od_pairs))
+    effective_dests   = list(dict.fromkeys(d for o, d in all_od_pairs))
+
+    if total < len(origins) * len(destinations) * len(cabin_classes) * 3:
+        logger.warning(
+            "scan_capped",
+            route_id=str(route_id),
+            original_combos=len(origins) * len(destinations) * len(cabin_classes) * 3,
+            capped_to=total,
+            dates=[d.isoformat() for d in scan_dates],
+            od_pairs=len(all_od_pairs),
+        )
+
     results: dict[str, Any] = {
         "route_id":      str(route_id),
-        "origins":       origins,
-        "destinations":  destinations,
+        "origins":       effective_origins,
+        "destinations":  effective_dests,
         "cabin_classes": cabin_classes,
         "dates_scanned": [d.isoformat() for d in scan_dates],
         "scan_type":     "full" if deep else "quick",
@@ -156,8 +194,7 @@ async def scan_route(
             trip_type=trip_type,
             return_date_offset_days=return_date_offset_days,
         )
-        for origin in origins
-        for dest in destinations
+        for origin, dest in all_od_pairs
         for cabin in cabin_classes
         for dep_date in scan_dates
     ]

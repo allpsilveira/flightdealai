@@ -93,11 +93,29 @@ async def search_flights(
                                wait_s=wait, origin=origin, destination=destination)
                 await asyncio.sleep(wait)
                 continue              # retry
-            resp.raise_for_status()
-            return _normalize(resp.json(), origin, destination, departure_date,
+            if resp.status_code != 200:
+                logger.error(
+                    "serpapi_http_error",
+                    status=resp.status_code,
+                    body=resp.text[:500],
+                    origin=origin, destination=destination,
+                    date=str(departure_date), cabin=cabin_class,
+                )
+                return None
+            data = resp.json()
+            # SerpApi returns error field instead of HTTP error for some failures
+            if "error" in data:
+                logger.error(
+                    "serpapi_api_error",
+                    error=data["error"],
+                    origin=origin, destination=destination,
+                    date=str(departure_date), cabin=cabin_class,
+                )
+                return None
+            return _normalize(data, origin, destination, departure_date,
                               cabin_class, deep=deep, trip_type=trip_type)
         except Exception as exc:
-            logger.warning(
+            logger.error(
                 "serpapi_search_failed",
                 origin=origin, destination=destination,
                 date=str(departure_date), cabin=cabin_class, error=str(exc),

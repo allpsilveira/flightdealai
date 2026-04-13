@@ -85,6 +85,8 @@ async def _run_and_log(
     db: AsyncSession,
     trigger_type: str = "manual",
     force_enrich: bool = True,
+    trip_type: str = "ONE_WAY",
+    return_date_offset_days: int | None = None,
 ) -> ScanResponse:
     # ── 1. Collect raw prices via SerpApi ─────────────────────────────────────
     scan_result = await scan_route(
@@ -96,6 +98,8 @@ async def _run_and_log(
         date_to=date_to,
         db=db,
         deep=deep,
+        trip_type=trip_type,
+        return_date_offset_days=return_date_offset_days,
     )
 
     # ── 2. Run full scoring pipeline → writes DealAnalysis + FlightOffer rows ─
@@ -205,6 +209,8 @@ async def scan_saved_route(
         db=db,
         trigger_type=trigger_type,
         force_enrich=force_enrich,
+        trip_type=route.trip_type,
+        return_date_offset_days=route.return_date_offset_days,
     )
 
 
