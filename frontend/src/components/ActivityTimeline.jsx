@@ -29,6 +29,14 @@ function IconAirflow() {
   );
 }
 
+function IconWarning() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+      <path d="M8 1.5a.5.5 0 0 1 .44.26l6 11A.5.5 0 0 1 14 13.5H2a.5.5 0 0 1-.44-.74l6-11A.5.5 0 0 1 8 1.5zM8 6a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-3A.5.5 0 0 0 8 6zm0 5.5a.6.6 0 1 0 0 1.2.6.6 0 0 0 0-1.2z" />
+    </svg>
+  );
+}
+
 const TRIGGER_CONFIG = {
   manual: {
     label:      "You · Scan Now",
@@ -59,6 +67,22 @@ const TRIGGER_CONFIG = {
     badgeBg:    "bg-indigo-50 dark:bg-indigo-500/15",
     badgeText:  "text-indigo-600 dark:text-indigo-400",
     Icon:       IconAirflow,
+  },
+};
+
+// Status overrides applied on top of trigger config when scan failed/partial
+const STATUS_OVERRIDE = {
+  error: {
+    iconBg:    "bg-red-100 dark:bg-red-500/20",
+    iconColor: "text-red-500 dark:text-red-400",
+    dotBg:     "bg-red-500",
+    Icon:      IconWarning,
+  },
+  partial: {
+    iconBg:    "bg-amber-100 dark:bg-amber-500/20",
+    iconColor: "text-amber-600 dark:text-amber-400",
+    dotBg:     "bg-amber-400",
+    Icon:      IconWarning,
   },
 };
 
@@ -117,22 +141,25 @@ export default function ActivityTimeline({ routeId, onEventClick }) {
       <div className="space-y-1">
         {scans.map((scan, i) => {
           const ts      = new Date(scan.triggered_at);
-          const cfg     = getTrigger(scan.trigger_type);
+          const base    = getTrigger(scan.trigger_type);
+          const override = STATUS_OVERRIDE[scan.status] ?? {};
+          const cfg     = { ...base, ...override };
           const { Icon } = cfg;
-          const isLast  = i === scans.length - 1;
+          const isFailed  = scan.status === "error";
+          const isPartial = scan.status === "partial";
+          const isOk      = !isFailed && !isPartial;
+          const clickable = isOk && scan.deals_scored > 0;
 
           return (
             <div
               key={scan.id}
               className={`flex gap-3 px-1 py-3 rounded-xl transition-colors
-                ${scan.deals_scored > 0
-                  ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer"
-                  : ""
-                }`}
+                ${clickable ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer" : ""}
+                ${isFailed  ? "bg-red-50/40 dark:bg-red-500/5 rounded-xl" : ""}
+                ${isPartial ? "bg-amber-50/40 dark:bg-amber-500/5 rounded-xl" : ""}
+              `}
               onClick={() => {
-                if (scan.deals_scored > 0 && onEventClick) {
-                  onEventClick(scan);
-                }
+                if (clickable && onEventClick) onEventClick(scan);
               }}
             >
               {/* Icon circle */}
@@ -142,10 +169,10 @@ export default function ActivityTimeline({ routeId, onEventClick }) {
               </div>
 
               <div className="flex-1 min-w-0">
-                {/* Top row: trigger label + relative time + badge */}
+                {/* Top row: trigger label + relative time */}
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${cfg.badgeBg} ${cfg.badgeText}`}>
-                    {cfg.label}
+                  <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${base.badgeBg} ${base.badgeText}`}>
+                    {base.label}
                   </span>
                   <span className="text-xs text-zinc-400 dark:text-zinc-500">
                     {formatDistanceToNow(ts, { addSuffix: true })}
@@ -153,16 +180,24 @@ export default function ActivityTimeline({ routeId, onEventClick }) {
                 </div>
 
                 {/* Headline */}
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug">
-                  {scan.deals_scored > 0
-                    ? <>
+                <p className="text-sm font-semibold leading-snug">
+                  {isFailed
+                    ? <span className="text-red-600 dark:text-red-400">
+                        Scan failed — no prices returned
+                      </span>
+                    : isPartial
+                    ? <span className="text-amber-600 dark:text-amber-400">
+                        Partial scan — {scan.prices_collected} price{scan.prices_collected !== 1 ? "s" : ""} collected, scoring failed
+                      </span>
+                    : scan.deals_scored > 0
+                    ? <span className="text-zinc-900 dark:text-white">
                         {scan.deals_scored} deal{scan.deals_scored !== 1 ? "s" : ""} scored
                         {scan.best_price_usd
                           ? <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">
                               · Best ${Math.round(scan.best_price_usd).toLocaleString()}
                             </span>
                           : ""}
-                      </>
+                      </span>
                     : <span className="text-zinc-500 dark:text-zinc-400 font-normal">
                         Scan complete — no new deals
                       </span>
@@ -178,17 +213,37 @@ export default function ActivityTimeline({ routeId, onEventClick }) {
                       <span>{scan.origins} → {scan.destinations}</span>
                     </>
                   )}
-                  {scan.prices_collected > 0 && (
+                  {isOk && scan.prices_collected > 0 && (
                     <>
                       <span className="text-zinc-300 dark:text-zinc-700">·</span>
                       <span>{scan.prices_collected} price{scan.prices_collected !== 1 ? "s" : ""} collected</span>
                     </>
                   )}
+                  {isFailed && (
+                    <>
+                      <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                      <span className="text-red-400 dark:text-red-500">Check API quota or key</span>
+                    </>
+                  )}
                 </p>
               </div>
 
-              {/* Right: deal count dot or nothing */}
-              {scan.deals_scored > 0 && (
+              {/* Right: deal count dot (ok only) or error/partial indicator */}
+              {isFailed && (
+                <div className="flex-shrink-0 self-center">
+                  <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                    <span className="text-white text-2xs font-bold">!</span>
+                  </div>
+                </div>
+              )}
+              {isPartial && (
+                <div className="flex-shrink-0 self-center">
+                  <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
+                    <span className="text-white text-2xs font-bold">~</span>
+                  </div>
+                </div>
+              )}
+              {isOk && scan.deals_scored > 0 && (
                 <div className="flex-shrink-0 self-center">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center text-2xs font-bold
                                   text-white ${cfg.dotBg}`}>
@@ -208,6 +263,14 @@ export default function ActivityTimeline({ routeId, onEventClick }) {
               <span className="text-xs text-zinc-400 dark:text-zinc-500">{cfg.sublabel}</span>
             </div>
           ))}
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">Failed scan</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-amber-400" />
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">Partial scan</span>
+          </div>
         </div>
       </div>
     </div>

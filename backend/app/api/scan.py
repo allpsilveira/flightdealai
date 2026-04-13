@@ -113,6 +113,15 @@ async def _run_and_log(
 
     # ── 3. Log scan history ────────────────────────────────────────────────────
     best = scan_result["best_prices"][0] if scan_result["best_prices"] else None
+    prices_collected = scan_result["sources"].get("serpapi", 0)
+
+    if prices_collected == 0:
+        scan_status = "error"       # SerpApi returned nothing — API failure / quota
+    elif len(deals) == 0:
+        scan_status = "partial"     # Prices collected but scoring/pipeline failed
+    else:
+        scan_status = "ok"
+
     history = ScanHistory(
         id=uuid.uuid4(),
         route_id=route_id if route_id != uuid.UUID(int=0) else None,
@@ -121,13 +130,13 @@ async def _run_and_log(
         origins=",".join(origins),
         destinations=",".join(destinations),
         cabin_classes=",".join(cabin_classes),
-        prices_collected=scan_result["sources"].get("serpapi", 0),
+        prices_collected=prices_collected,
         deals_scored=len(deals),
         best_price_usd=best["price_usd"] if best else None,
         best_origin=best["origin"] if best else None,
         best_destination=best["destination"] if best else None,
         best_cabin=best["cabin_class"] if best else None,
-        status="ok",
+        status=scan_status,
     )
     db.add(history)
     await db.commit()
