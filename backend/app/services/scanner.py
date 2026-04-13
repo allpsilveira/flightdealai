@@ -49,11 +49,22 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def expand_origins_by_drive(origins: list[str], max_drive_hours: float | None) -> list[str]:
+def expand_origins_by_drive(
+    origins: list[str],
+    max_drive_hours: float | None,
+    max_nearby_per_origin: int = 3,
+    max_total: int = 8,
+) -> list[str]:
     """
     Return origins expanded with nearby airports reachable within max_drive_hours.
     Drive time formula: km * 1.3 (road factor) / 80 km/h.
     So max straight-line km = max_drive_hours * 80 / 1.3.
+
+    Caps:
+      max_nearby_per_origin — max additional airports added per selected origin (default 3).
+      max_total             — hard cap on total expanded origins (default 8).
+    These prevent quota explosions when many airports exist within a large drive radius.
+    Nearby airports are sorted by distance so the closest ones are prioritised.
     """
     if not max_drive_hours or max_drive_hours <= 0:
         return origins
@@ -66,23 +77,38 @@ def expand_origins_by_drive(origins: list[str], max_drive_hours: float | None) -
     seen = set(origins)
 
     for origin_code in origins:
+        if len(expanded) >= max_total:
+            break
+
         origin = airport_map.get(origin_code)
-        if not origin:
+        if not origin or not origin.get("lat") or not origin.get("lon"):
             continue
+
+        # Find all nearby airports, sorted by distance (closest first)
+        nearby: list[tuple[float, dict]] = []
         for ap in airports:
-            if ap["iata"] in seen:
+            if ap["iata"] in seen or not ap.get("lat") or not ap.get("lon"):
                 continue
             dist = _haversine_km(origin["lat"], origin["lon"], ap["lat"], ap["lon"])
             if dist <= max_km:
-                expanded.append(ap["iata"])
-                seen.add(ap["iata"])
-                logger.info(
-                    "nearby_airport_added",
-                    origin=origin_code,
-                    nearby=ap["iata"],
-                    dist_km=round(dist),
-                    drive_h=round(dist * 1.3 / 80, 1),
-                )
+                nearby.append((dist, ap))
+
+        nearby.sort(key=lambda x: x[0])
+
+        added = 0
+        for dist, ap in nearby:
+            if added >= max_nearby_per_origin or len(expanded) >= max_total:
+                break
+            expanded.append(ap["iata"])
+            seen.add(ap["iata"])
+            added += 1
+            logger.info(
+                "nearby_airport_added",
+                origin=origin_code,
+                nearby=ap["iata"],
+                dist_km=round(dist),
+                drive_h=round(dist * 1.3 / 80, 1),
+            )
 
     return expanded
 
