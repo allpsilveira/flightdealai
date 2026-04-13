@@ -216,10 +216,11 @@ async def get_route_offers(
     Spans the full date range — not just one scan. Powers the AirlineLeaderboard.
     Includes deal_analysis_id so the frontend can open the correct deal panel per airline.
     """
-    # Subquery: minimum price per primary_airline for this route
+    # Subquery: minimum price per (primary_airline, stops) combo for this route
     min_price_sq = (
         select(
             FlightOffer.primary_airline,
+            FlightOffer.stops,
             func.min(FlightOffer.price_usd).label("min_price"),
         )
         .where(FlightOffer.route_id == route_id)
@@ -227,15 +228,16 @@ async def get_route_offers(
     )
     if cabin_class:
         min_price_sq = min_price_sq.where(FlightOffer.cabin_class == cabin_class)
-    min_price_sq = min_price_sq.group_by(FlightOffer.primary_airline).subquery()
+    min_price_sq = min_price_sq.group_by(FlightOffer.primary_airline, FlightOffer.stops).subquery()
 
-    # Main query: join to get the full offer row for each airline's cheapest price
+    # Main query: join to get the full offer row for each (airline, stops) cheapest price
     stmt = (
         select(FlightOffer)
         .join(
             min_price_sq,
             and_(
                 FlightOffer.primary_airline == min_price_sq.c.primary_airline,
+                FlightOffer.stops == min_price_sq.c.stops,
                 FlightOffer.price_usd == min_price_sq.c.min_price,
             ),
         )
@@ -246,11 +248,11 @@ async def get_route_offers(
         stmt = stmt.where(FlightOffer.cabin_class == cabin_class)
 
     result = await db.execute(stmt)
-    # Deduplicate (multiple rows can match at the same min price for an airline)
+    # Deduplicate (multiple rows can match at the same min price for an airline+stops combo)
     seen: set[str] = set()
     offers = []
     for offer in result.scalars().all():
-        key = offer.primary_airline or "??"
+        key = f"{offer.primary_airline or '??'}|{offer.stops}"
         if key not in seen:
             seen.add(key)
             offers.append(offer)

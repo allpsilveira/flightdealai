@@ -61,6 +61,53 @@ const fmtMins = (mins) => {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
+// Renders AI text with basic markdown: **bold**, bullet lists, paragraphs
+function FormattedText({ text, className = "" }) {
+  if (!text) return null;
+  const paragraphs = text.split(/\n\n+/).filter(Boolean);
+  return (
+    <div className={`space-y-2 ${className}`}>
+      {paragraphs.map((para, pi) => {
+        const lines = para.split(/\n/).filter(Boolean);
+        const isList = lines.every((l) => /^[-•*]\s/.test(l));
+        if (isList) {
+          return (
+            <ul key={pi} className="space-y-1 pl-4">
+              {lines.map((line, li) => (
+                <li key={li} className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed list-disc">
+                  <InlineFormatted text={line.replace(/^[-•*]\s+/, "")} />
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={pi} className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
+            <InlineFormatted text={para} />
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function InlineFormatted({ text }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i} className="font-semibold text-zinc-800 dark:text-zinc-100">
+            {part.slice(2, -2)}
+          </strong>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 const ScoreRow = ({ label, value, max, description }) => {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;
   return (
@@ -681,14 +728,14 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
                                   divide-y divide-zinc-100 dark:divide-zinc-700/60">
                     {offers.map((offer, i) => {
                       const airlineName = AIRLINE_NAME[offer.primary_airline] ?? offer.primary_airline ?? "Unknown";
-                      const depDate = offer.departure_date
-                        ? new Date(offer.departure_date + "T12:00:00") : null;
                       const orig = offer.origin ?? deal.origin;
                       const dest2 = offer.destination ?? deal.destination;
                       const offerIsoDate = offer.departure_date ?? deal.departure_date;
                       const offerDateStr = offerIsoDate?.replace(/-/g, "");
                       const offerCabin = { BUSINESS: "business", FIRST: "first", PREMIUM_ECONOMY: "premiumeconomy" }[deal.cabin_class] ?? "business";
-                      const offerDateLabel = depDate ? depDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+                      const offerDateLabel = offer.departure_date
+                        ? new Date(offer.departure_date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+                        : "";
                       const skyScannerOfferUrl = orig && dest2 && offerDateStr
                         ? `https://www.skyscanner.com/transport/flights/${orig.toLowerCase()}/${dest2.toLowerCase()}/${offerDateStr}/?cabin_class=${offerCabin}&adultsv2=1`
                         : null;
@@ -788,7 +835,7 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
                   <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
                     AI Analysis
                   </p>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">{rec}</p>
+                  <FormattedText text={rec} />
                 </div>
               )}
             </div>

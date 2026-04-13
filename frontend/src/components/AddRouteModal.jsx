@@ -1,11 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoutesStore } from "../stores/useRoutes";
 import allAirports from "../data/airports.json";
-
-const AIRPORT_CODES = [
-  "MIA", "MCO", "FLL", "TPA", "JFK", "EWR", "LAX", "ORD", "DFW", "ATL",
-  "GRU", "CNF", "BSB", "REC", "FOR", "SSA", "CWB", "POA", "GIG", "SDU",
-];
 
 const AIRPORT_MAP = Object.fromEntries(allAirports.map((a) => [a.iata, a]));
 
@@ -42,7 +37,7 @@ const EMPTY = {
   date_to: "",
 };
 
-function AirportRow({ code, selected, onClick }) {
+function AirportRow({ code, selected, onClick, label }) {
   const ap = AIRPORT_MAP[code];
   return (
     <button
@@ -60,12 +55,76 @@ function AirportRow({ code, selected, onClick }) {
         {code}
       </span>
       <span className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-        {ap ? `${ap.city}, ${ap.country}` : "—"}
+        {label ?? (ap ? `${ap.city}, ${ap.country}` : "Custom airport code")}
       </span>
       {selected && (
         <span className="ml-auto text-brand-500 text-xs font-bold flex-shrink-0">✓</span>
       )}
     </button>
+  );
+}
+
+function AirportPicker({ selected, onToggle }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toUpperCase();
+
+  const filtered = useMemo(() => {
+    if (!q) return allAirports.slice(0, 30);
+    return allAirports.filter((a) =>
+      a.iata.includes(q) ||
+      a.city.toUpperCase().includes(q) ||
+      a.name.toUpperCase().includes(q) ||
+      (a.country && a.country.toUpperCase().includes(q))
+    ).slice(0, 20);
+  }, [q]);
+
+  // Allow custom IATA if exactly 3 letters and not in DB
+  const customCode = q.length === 3 && /^[A-Z]{3}$/.test(q) && !AIRPORT_MAP[q] ? q : null;
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search city, airport or IATA code…"
+        className="input mb-2 text-sm"
+        autoFocus
+      />
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selected.map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => onToggle(code)}
+              className="px-2.5 py-1 rounded-lg bg-brand-500 text-white text-xs font-bold flex items-center gap-1.5"
+            >
+              {code} <span className="opacity-70">✕</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="space-y-1 max-h-56 overflow-y-auto pr-1">
+        {filtered.map((a) => (
+          <AirportRow key={a.iata} code={a.iata}
+            label={`${a.city}, ${a.country} — ${a.name}`}
+            selected={selected.includes(a.iata)}
+            onClick={() => onToggle(a.iata)} />
+        ))}
+        {customCode && (
+          <AirportRow code={customCode}
+            label="Custom airport code (not in database)"
+            selected={selected.includes(customCode)}
+            onClick={() => onToggle(customCode)} />
+        )}
+        {filtered.length === 0 && !customCode && (
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center py-4">
+            No airports found. Type a 3-letter IATA code to add it directly.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -161,20 +220,12 @@ export default function AddRouteModal({ onClose }) {
           {step === 0 && (
             <div>
               <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-3">
-                Select your primary departure airport(s)
+                Select your departure airport(s) — any city worldwide
               </p>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                {AIRPORT_CODES.map((a) => (
-                  <AirportRow key={a} code={a}
-                    selected={form.origins.includes(a)}
-                    onClick={() => toggle("origins", a)} />
-                ))}
-              </div>
-              {form.origins.length > 0 && (
-                <p className="text-xs text-brand-500 mt-3 font-medium">
-                  Selected: {form.origins.join(", ")}
-                </p>
-              )}
+              <AirportPicker
+                selected={form.origins}
+                onToggle={(code) => toggle("origins", code)}
+              />
             </div>
           )}
 
@@ -182,20 +233,12 @@ export default function AddRouteModal({ onClose }) {
           {step === 1 && (
             <div>
               <p className="text-sm text-zinc-600 dark:text-zinc-300 mb-3">
-                Select destination airport(s)
+                Select destination airport(s) — any city worldwide
               </p>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                {AIRPORT_CODES.map((a) => (
-                  <AirportRow key={a} code={a}
-                    selected={form.destinations.includes(a)}
-                    onClick={() => toggle("destinations", a)} />
-                ))}
-              </div>
-              {form.destinations.length > 0 && (
-                <p className="text-xs text-brand-500 mt-3 font-medium">
-                  Selected: {form.destinations.join(", ")}
-                </p>
-              )}
+              <AirportPicker
+                selected={form.destinations}
+                onToggle={(code) => toggle("destinations", code)}
+              />
             </div>
           )}
 
