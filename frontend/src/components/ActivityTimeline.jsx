@@ -70,7 +70,6 @@ const TRIGGER_CONFIG = {
   },
 };
 
-// Status overrides applied on top of trigger config when scan failed/partial
 const STATUS_OVERRIDE = {
   error: {
     iconBg:    "bg-red-100 dark:bg-red-500/20",
@@ -88,191 +87,263 @@ const STATUS_OVERRIDE = {
 
 const getTrigger = (type) => TRIGGER_CONFIG[type] ?? TRIGGER_CONFIG.scheduled;
 
-export default function ActivityTimeline({ routeId, onEventClick }) {
-  const [scans,   setScans]   = useState(null);
-  const [error,   setError]   = useState(false);
+const FILTERS = [
+  { key: "all",     label: "All" },
+  { key: "manual",  label: "Manual" },
+  { key: "auto",    label: "Scheduled" },
+  { key: "error",   label: "Failed" },
+];
+
+export default function ActivityTimeline({ routeId, onEventClick, refreshKey = 0 }) {
+  const [scans,      setScans]   = useState(null);
+  const [error,      setError]   = useState(false);
+  const [filter,     setFilter]  = useState("all");
 
   const reload = useCallback(() => {
     if (!routeId) return;
     setScans(null);
-    api.get("/scan/history", { params: { route_id: routeId, limit: 30 } })
+    setError(false);
+    api.get("/scan/history", { params: { route_id: routeId, limit: 50 } })
       .then((r) => setScans(r.data))
       .catch(() => { setScans([]); setError(true); });
   }, [routeId]);
 
-  useEffect(() => { reload(); }, [reload]);
+  // Reload when route changes OR when parent signals a refresh (e.g. after scan)
+  useEffect(() => { reload(); }, [reload, refreshKey]);
 
-  if (scans === null) {
-    return (
-      <div className="space-y-5 animate-pulse px-1">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex gap-3">
-            <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex-shrink-0" />
-            <div className="flex-1 space-y-2 pt-1">
-              <div className="h-3 bg-zinc-100 dark:bg-zinc-800 rounded w-1/3" />
-              <div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded w-2/3" />
-              <div className="h-3 bg-zinc-100 dark:bg-zinc-800 rounded w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (scans.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-10 text-center">
-        <div className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-3">
-          <IconClock />
-        </div>
-        <p className="text-sm font-semibold text-zinc-900 dark:text-white mb-1">No scans yet</p>
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Click "Scan Now" to run the first scan. Activity will appear here.
-        </p>
-      </div>
-    );
-  }
+  // Apply filter
+  const visible = (scans ?? []).filter((s) => {
+    if (filter === "all")    return true;
+    if (filter === "error")  return s.status === "error" || s.status === "partial";
+    if (filter === "manual") return s.trigger_type === "manual";
+    if (filter === "auto")   return s.trigger_type !== "manual";
+    return true;
+  });
 
   return (
-    <div className="relative">
-      {/* Vertical guide line */}
-      <div className="absolute left-[13px] top-8 bottom-2 w-px bg-zinc-100 dark:bg-zinc-800 pointer-events-none" />
-
-      <div className="space-y-1">
-        {scans.map((scan, i) => {
-          const ts      = new Date(scan.triggered_at);
-          const base    = getTrigger(scan.trigger_type);
-          const override = STATUS_OVERRIDE[scan.status] ?? {};
-          const cfg     = { ...base, ...override };
-          const { Icon } = cfg;
-          const isFailed  = scan.status === "error";
-          const isPartial = scan.status === "partial";
-          const isOk      = !isFailed && !isPartial;
-          const clickable = isOk && scan.deals_scored > 0;
+    <div>
+      {/* Filter tabs */}
+      <div className="flex items-center gap-1 mb-4 flex-wrap">
+        {FILTERS.map(({ key, label }) => {
+          const count = key === "all"
+            ? (scans ?? []).length
+            : key === "error"
+            ? (scans ?? []).filter(s => s.status === "error" || s.status === "partial").length
+            : key === "manual"
+            ? (scans ?? []).filter(s => s.trigger_type === "manual").length
+            : (scans ?? []).filter(s => s.trigger_type !== "manual").length;
 
           return (
-            <div
-              key={scan.id}
-              className={`flex gap-3 px-1 py-3 rounded-xl transition-colors
-                ${clickable ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer" : ""}
-                ${isFailed  ? "bg-red-50/40 dark:bg-red-500/5 rounded-xl" : ""}
-                ${isPartial ? "bg-amber-50/40 dark:bg-amber-500/5 rounded-xl" : ""}
-              `}
-              onClick={() => {
-                if (clickable && onEventClick) onEventClick(scan);
-              }}
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1.5
+                ${filter === key
+                  ? key === "error"
+                    ? "bg-red-500 text-white"
+                    : "bg-brand-500 text-white"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}
             >
-              {/* Icon circle */}
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0
-                               ${cfg.iconBg} ${cfg.iconColor}`}>
-                <Icon />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                {/* Top row: trigger label + relative time */}
-                <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${base.badgeBg} ${base.badgeText}`}>
-                    {base.label}
-                  </span>
-                  <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                    {formatDistanceToNow(ts, { addSuffix: true })}
-                  </span>
-                </div>
-
-                {/* Headline */}
-                <p className="text-sm font-semibold leading-snug">
-                  {isFailed
-                    ? <span className="text-red-600 dark:text-red-400">
-                        Scan failed — no prices returned
-                      </span>
-                    : isPartial
-                    ? <span className="text-amber-600 dark:text-amber-400">
-                        Partial scan — {scan.prices_collected} price{scan.prices_collected !== 1 ? "s" : ""} collected, scoring failed
-                      </span>
-                    : scan.deals_scored > 0
-                    ? <span className="text-zinc-900 dark:text-white">
-                        {scan.deals_scored} deal{scan.deals_scored !== 1 ? "s" : ""} scored
-                        {scan.best_price_usd
-                          ? <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">
-                              · Best ${Math.round(scan.best_price_usd).toLocaleString()}
-                            </span>
-                          : ""}
-                      </span>
-                    : <span className="text-zinc-500 dark:text-zinc-400 font-normal">
-                        Scan complete — no new deals
-                      </span>
-                  }
-                </p>
-
-                {/* Detail line */}
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  <span>{format(ts, "d MMM yyyy, HH:mm")}</span>
-                  {scan.origins && scan.destinations && (
-                    <>
-                      <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                      <span>{scan.origins} → {scan.destinations}</span>
-                    </>
-                  )}
-                  {isOk && scan.prices_collected > 0 && (
-                    <>
-                      <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                      <span>{scan.prices_collected} price{scan.prices_collected !== 1 ? "s" : ""} collected</span>
-                    </>
-                  )}
-                  {isFailed && (
-                    <>
-                      <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                      <span className="text-red-400 dark:text-red-500">Check API quota or key</span>
-                    </>
-                  )}
-                </p>
-              </div>
-
-              {/* Right: deal count dot (ok only) or error/partial indicator */}
-              {isFailed && (
-                <div className="flex-shrink-0 self-center">
-                  <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
-                    <span className="text-white text-2xs font-bold">!</span>
-                  </div>
-                </div>
+              {label}
+              {scans !== null && count > 0 && (
+                <span className={`text-2xs tabular-nums ${filter === key ? "opacity-80" : "opacity-60"}`}>
+                  {count}
+                </span>
               )}
-              {isPartial && (
-                <div className="flex-shrink-0 self-center">
-                  <div className="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
-                    <span className="text-white text-2xs font-bold">~</span>
-                  </div>
-                </div>
-              )}
-              {isOk && scan.deals_scored > 0 && (
-                <div className="flex-shrink-0 self-center">
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-2xs font-bold
-                                  text-white ${cfg.dotBg}`}>
-                    {scan.deals_scored > 9 ? "9+" : scan.deals_scored}
-                  </div>
-                </div>
-              )}
-            </div>
+            </button>
           );
         })}
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 flex-wrap pt-3 pb-1 px-1 border-t border-zinc-100 dark:border-zinc-800 mt-2">
-          {Object.entries(TRIGGER_CONFIG).map(([key, cfg]) => (
-            <div key={key} className="flex items-center gap-1.5">
-              <div className={`w-3 h-3 rounded-full ${cfg.dotBg}`} />
-              <span className="text-xs text-zinc-400 dark:text-zinc-500">{cfg.sublabel}</span>
+        {/* Reload button */}
+        <button
+          onClick={reload}
+          className="ml-auto text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600
+                     dark:hover:text-zinc-300 transition-colors"
+          title="Refresh timeline"
+        >
+          ↺ Refresh
+        </button>
+      </div>
+
+      {/* Loading skeleton */}
+      {scans === null && (
+        <div className="space-y-5 animate-pulse px-1">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex gap-3">
+              <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-800 flex-shrink-0" />
+              <div className="flex-1 space-y-2 pt-1">
+                <div className="h-3 bg-zinc-100 dark:bg-zinc-800 rounded w-1/3" />
+                <div className="h-4 bg-zinc-100 dark:bg-zinc-800 rounded w-2/3" />
+                <div className="h-3 bg-zinc-100 dark:bg-zinc-800 rounded w-1/2" />
+              </div>
             </div>
           ))}
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">Failed scan</span>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {scans !== null && visible.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <div className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-3">
+            <IconClock />
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-amber-400" />
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">Partial scan</span>
+          {scans.length === 0 ? (
+            <>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white mb-1">No activity yet</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                Click "Scan Now" to run the first scan. All activity will appear here.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white mb-1">No results for this filter</p>
+              <button onClick={() => setFilter("all")} className="text-xs text-brand-500 hover:underline mt-1">
+                Show all
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Timeline */}
+      {scans !== null && visible.length > 0 && (
+        <div className="relative">
+          {/* Vertical guide line */}
+          <div className="absolute left-[13px] top-8 bottom-2 w-px bg-zinc-100 dark:bg-zinc-800 pointer-events-none" />
+
+          <div className="space-y-1">
+            {visible.map((scan) => {
+              const ts        = new Date(scan.triggered_at);
+              const base      = getTrigger(scan.trigger_type);
+              const override  = STATUS_OVERRIDE[scan.status] ?? {};
+              const cfg       = { ...base, ...override };
+              const { Icon }  = cfg;
+              const isFailed  = scan.status === "error";
+              const isPartial = scan.status === "partial";
+              const isOk      = !isFailed && !isPartial;
+              const clickable = isOk && scan.deals_scored > 0;
+
+              return (
+                <div
+                  key={scan.id}
+                  className={`flex gap-3 px-1 py-3 rounded-xl transition-colors
+                    ${clickable ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer" : ""}
+                    ${isFailed  ? "bg-red-50/40 dark:bg-red-500/5" : ""}
+                    ${isPartial ? "bg-amber-50/40 dark:bg-amber-500/5" : ""}
+                  `}
+                  onClick={() => { if (clickable && onEventClick) onEventClick(scan); }}
+                >
+                  {/* Icon circle */}
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0
+                                   ${cfg.iconBg} ${cfg.iconColor}`}>
+                    <Icon />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    {/* Top row */}
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${base.badgeBg} ${base.badgeText}`}>
+                        {base.label}
+                      </span>
+                      <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                        {formatDistanceToNow(ts, { addSuffix: true })}
+                      </span>
+                    </div>
+
+                    {/* Headline */}
+                    <p className="text-sm font-semibold leading-snug">
+                      {isFailed
+                        ? <span className="text-red-600 dark:text-red-400">
+                            Scan failed — no prices returned
+                          </span>
+                        : isPartial
+                        ? <span className="text-amber-600 dark:text-amber-400">
+                            Partial — {scan.prices_collected} price{scan.prices_collected !== 1 ? "s" : ""} collected, scoring failed
+                          </span>
+                        : scan.deals_scored > 0
+                        ? <span className="text-zinc-900 dark:text-white">
+                            {scan.deals_scored} deal{scan.deals_scored !== 1 ? "s" : ""} scored
+                            {scan.best_price_usd
+                              ? <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">
+                                  · Best ${Math.round(scan.best_price_usd).toLocaleString()}
+                                </span>
+                              : ""}
+                          </span>
+                        : <span className="text-zinc-500 dark:text-zinc-400 font-normal">
+                            Scan complete — no new deals
+                          </span>
+                      }
+                    </p>
+
+                    {/* Detail line */}
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span>{format(ts, "d MMM yyyy, HH:mm")}</span>
+                      {scan.origins && scan.destinations && (
+                        <>
+                          <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                          <span>{scan.origins} → {scan.destinations}</span>
+                        </>
+                      )}
+                      {isOk && scan.prices_collected > 0 && (
+                        <>
+                          <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                          <span>{scan.prices_collected} price{scan.prices_collected !== 1 ? "s" : ""} collected</span>
+                        </>
+                      )}
+                      {isFailed && (
+                        <>
+                          <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                          <span className="text-red-400 dark:text-red-500">Check API quota or key</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Right badge */}
+                  {isFailed && (
+                    <div className="flex-shrink-0 self-center w-5 h-5 rounded-full bg-red-500
+                                    flex items-center justify-center">
+                      <span className="text-white text-2xs font-bold">!</span>
+                    </div>
+                  )}
+                  {isPartial && (
+                    <div className="flex-shrink-0 self-center w-5 h-5 rounded-full bg-amber-400
+                                    flex items-center justify-center">
+                      <span className="text-white text-2xs font-bold">~</span>
+                    </div>
+                  )}
+                  {isOk && scan.deals_scored > 0 && (
+                    <div className={`flex-shrink-0 self-center w-5 h-5 rounded-full flex items-center
+                                    justify-center text-2xs font-bold text-white ${cfg.dotBg}`}>
+                      {scan.deals_scored > 9 ? "9+" : scan.deals_scored}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 flex-wrap pt-3 pb-1 px-1
+                            border-t border-zinc-100 dark:border-zinc-800 mt-2">
+              {Object.entries(TRIGGER_CONFIG).map(([key, cfg]) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <div className={`w-3 h-3 rounded-full ${cfg.dotBg}`} />
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">{cfg.sublabel}</span>
+                </div>
+              ))}
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">Failed</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">Partial</span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

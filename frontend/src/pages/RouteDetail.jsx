@@ -79,6 +79,7 @@ export default function RouteDetail() {
   const [selectedDeal,   setSelectedDeal]    = useState(null);
   const [cabinFilter,    setCabinFilter]     = useState(null);
   const [deleting,       setDeleting]        = useState(false);
+  const [timelineKey,    setTimelineKey]     = useState(0);
 
   const route = routes.find((r) => r.id === id) ?? null;
 
@@ -119,7 +120,10 @@ export default function RouteDetail() {
       .finally(() => setHistoryLoading(false));
   }, [id, route, historyDays, cabinFilter]);
 
-  const handleScan = () => scanRoute(id);
+  const handleScan = async () => {
+    await scanRoute(id);
+    setTimelineKey((k) => k + 1);  // force timeline to re-fetch after scan
+  };
 
   const handleDelete = async () => {
     if (!confirm(`Delete route "${route?.name}"? This cannot be undone.`)) return;
@@ -377,6 +381,7 @@ export default function RouteDetail() {
             <div className="card p-4">
               <ActivityTimeline
                 routeId={id}
+                refreshKey={timelineKey}
                 onEventClick={(event) => {
                   // Find matching deal by deal_analysis_id if available
                   if (event.deal_analysis_id) {

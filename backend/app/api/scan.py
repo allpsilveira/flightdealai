@@ -88,43 +88,57 @@ async def _run_and_log(
     trip_type: str = "ONE_WAY",
     return_date_offset_days: int | None = None,
 ) -> ScanResponse:
-    # ── 1. Collect raw prices via SerpApi ─────────────────────────────────────
-    scan_result = await scan_route(
-        route_id=route_id,
-        origins=origins,
-        destinations=destinations,
-        cabin_classes=cabin_classes,
-        date_from=date_from,
-        date_to=date_to,
-        db=db,
-        deep=deep,
-        trip_type=trip_type,
-        return_date_offset_days=return_date_offset_days,
-    )
+    import structlog as _structlog
+    _log = _structlog.get_logger(__name__)
 
-    # ── 2. Run full scoring pipeline → writes DealAnalysis + FlightOffer rows ─
+    scan_result = None
     deals = []
+    scan_status = "error"
+
     try:
-        deals = await run_pipeline_batch(
+        # ── 1. Collect raw prices via SerpApi ─────────────────────────────────
+        scan_result = await scan_route(
             route_id=route_id,
-            scan_results=scan_result,
+            origins=origins,
+            destinations=destinations,
+            cabin_classes=cabin_classes,
+            date_from=date_from,
+            date_to=date_to,
             db=db,
-            force_enrich=force_enrich,
+            deep=deep,
+            trip_type=trip_type,
+            return_date_offset_days=return_date_offset_days,
         )
+
+        # ── 2. Run scoring pipeline ────────────────────────────────────────────
+        try:
+            deals = await run_pipeline_batch(
+                route_id=route_id,
+                scan_results=scan_result,
+                db=db,
+                force_enrich=force_enrich,
+            )
+        except Exception as exc:
+            _log.warning("pipeline_batch_failed", error=str(exc))
+
+        prices_collected = scan_result["sources"].get("serpapi", 0)
+        if prices_collected == 0:
+            scan_status = "error"
+        elif len(deals) == 0:
+            scan_status = "partial"
+        else:
+            scan_status = "ok"
+
     except Exception as exc:
-        import structlog
-        structlog.get_logger(__name__).warning("pipeline_batch_failed", error=str(exc))
+        _log.error("scan_route_crashed", error=str(exc),
+                   origins=origins, destinations=destinations)
+        scan_status = "error"
 
-    # ── 3. Log scan history ────────────────────────────────────────────────────
-    best = scan_result["best_prices"][0] if scan_result["best_prices"] else None
-    prices_collected = scan_result["sources"].get("serpapi", 0)
-
-    if prices_collected == 0:
-        scan_status = "error"       # SerpApi returned nothing — API failure / quota
-    elif len(deals) == 0:
-        scan_status = "partial"     # Prices collected but scoring/pipeline failed
-    else:
-        scan_status = "ok"
+    # ── 3. ALWAYS write scan history, even on total failure ────────────────────
+    best = (scan_result["best_prices"][0]
+            if scan_result and scan_result.get("best_prices") else None)
+    prices_collected = (scan_result["sources"].get("serpapi", 0)
+                        if scan_result else 0)
 
     history = ScanHistory(
         id=uuid.uuid4(),
@@ -145,8 +159,21 @@ async def _run_and_log(
     db.add(history)
     await db.commit()
 
+    # Build a minimal result even if scan_route crashed, so the response is valid
+    result_data = {k: v for k, v in scan_result.items() if k != "all_offers"} \
+        if scan_result else {
+            "route_id":      str(route_id),
+            "origins":       origins,
+            "destinations":  destinations,
+            "cabin_classes": cabin_classes,
+            "dates_scanned": [],
+            "scan_type":     "full",
+            "sources":       {"serpapi": 0},
+            "best_prices":   [],
+        }
+
     return ScanResponse(
-        **{k: v for k, v in scan_result.items() if k != "all_offers"},
+        **result_data,
         deals_scored=len(deals),
         scan_history_id=str(history.id),
         enriched=force_enrich,
