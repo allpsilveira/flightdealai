@@ -12,7 +12,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.database import get_db
+from app.database import get_db, AsyncSessionLocal
 from app.models.route import Route
 from app.models.scan_history import ScanHistory
 from app.models.user import User
@@ -88,8 +88,8 @@ async def _run_and_log(
     trip_type: str = "ONE_WAY",
     return_date_offset_days: int | None = None,
 ) -> ScanResponse:
-    import structlog as _structlog
-    _log = _structlog.get_logger(__name__)
+    import structlog
+    _log = structlog.get_logger(__name__)
 
     scan_result = None
     deals = []
@@ -134,7 +134,11 @@ async def _run_and_log(
                    origins=origins, destinations=destinations)
         scan_status = "error"
 
-    # ── 3. ALWAYS write scan history, even on total failure ────────────────────
+    # ── 3. ALWAYS write scan history in a FRESH session ───────────────────────
+    # The shared `db` session may be in a bad state if any scan task failed
+    # mid-transaction. Using AsyncSessionLocal() directly guarantees the write
+    # succeeds regardless of what happened to the scan session.
+
     best = (scan_result["best_prices"][0]
             if scan_result and scan_result.get("best_prices") else None)
     prices_collected = (scan_result["sources"].get("serpapi", 0)
@@ -156,8 +160,12 @@ async def _run_and_log(
         best_cabin=best["cabin_class"] if best else None,
         status=scan_status,
     )
-    db.add(history)
-    await db.commit()
+    try:
+        async with AsyncSessionLocal() as hist_session:
+            hist_session.add(history)
+            await hist_session.commit()
+    except Exception as exc:
+        _log.error("scan_history_write_failed", error=str(exc), status=scan_status)
 
     # Build a minimal result even if scan_route crashed, so the response is valid
     result_data = {k: v for k, v in scan_result.items() if k != "all_offers"} \
