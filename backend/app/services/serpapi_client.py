@@ -9,6 +9,7 @@ Every scan returns:
 Runs every 4h for quick price checks and 3x/day for full trend scans.
 """
 import asyncio
+import random
 import structlog
 import httpx
 from datetime import date
@@ -84,11 +85,11 @@ async def search_flights(
     for attempt in range(3):
         try:
             async with _SEMAPHORE:
-                async with httpx.AsyncClient(timeout=30) as client:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
                     resp = await client.get(BASE_URL, params=params)
             # --- semaphore released before any sleep ---
             if resp.status_code == 429:
-                wait = 2 ** attempt   # 1s → 2s → 4s
+                wait = (2 ** attempt) + random.uniform(0, 1)  # jitter to avoid thundering herd
                 logger.warning("serpapi_rate_limited", attempt=attempt + 1,
                                wait_s=wait, origin=origin, destination=destination)
                 await asyncio.sleep(wait)

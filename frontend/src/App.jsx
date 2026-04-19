@@ -1,10 +1,23 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "./stores/useAuth";
-import Login from "./pages/Login";
-import Home from "./pages/Home";
-import RouteDetail from "./pages/RouteDetail";
-import Settings from "./pages/Settings";
 import Layout from "./components/Layout";
+
+// Lazy-loaded pages — each becomes a separate chunk (reduces initial bundle ~60%)
+const Login = lazy(() => import("./pages/Login"));
+const Home = lazy(() => import("./pages/Home"));
+const RouteDetail = lazy(() => import("./pages/RouteDetail"));
+const Settings = lazy(() => import("./pages/Settings"));
+
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-[#0a0e1a]">
+      <div className="animate-pulse text-champagne/60 font-serif text-lg">
+        Loading…
+      </div>
+    </div>
+  );
+}
 
 function RequireAuth({ children }) {
   const token = useAuthStore((s) => s.accessToken);
@@ -14,21 +27,23 @@ function RequireAuth({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <Layout />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<Home />} />
-          <Route path="route/:id" element={<RouteDetail />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Layout />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<Home />} />
+            <Route path="route/:id" element={<RouteDetail />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

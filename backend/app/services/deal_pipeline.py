@@ -15,6 +15,7 @@ For each (origin, destination, cabin, date) after a scan:
 
 Enrichment is NOT score-gated. Score quality improves as historical data accumulates.
 """
+import asyncio
 import uuid
 import structlog
 from datetime import date, datetime, timezone
@@ -78,7 +79,7 @@ async def run_pipeline(
         extra={"price_slope_7d": slope},
     )
 
-    # ── Step 4: Enrichment (Duffel + Seats.aero) ─────────────────────────────
+    # ── Step 4: Enrichment (Duffel + Seats.aero) — parallel ─────────────────
     duffel_result = None
     enriched_awards: list = []
 
@@ -86,16 +87,29 @@ async def run_pipeline(
         logger.info("pipeline_enriching", force=True,
                     origin=origin, destination=destination, cabin=cabin_class)
 
-        duffel_result = await duffel_client.enrich_offer(
+        # Run both enrichment calls in parallel (saves ~2-3s per pipeline run)
+        duffel_task = duffel_client.enrich_offer(
             origin, destination, departure_date, cabin_class
         )
+        awards_task = seats_aero_client.search_award_availability(
+            origin, destination, departure_date, cabin_class
+        )
+        duffel_result, raw_awards = await asyncio.gather(
+            duffel_task, awards_task, return_exceptions=True
+        )
+
+        # Handle exceptions from gather
+        if isinstance(duffel_result, BaseException):
+            logger.error("pipeline_duffel_error", error=str(duffel_result))
+            duffel_result = None
+        if isinstance(raw_awards, BaseException):
+            logger.error("pipeline_awards_error", error=str(raw_awards))
+            raw_awards = None
+
         if duffel_result:
             await store_duffel_price(route_id, duffel_result, db)
             xref["sources_confirmed"].append("duffel")
 
-        raw_awards = await seats_aero_client.search_award_availability(
-            origin, destination, departure_date, cabin_class
-        )
         if raw_awards:
             await store_award_prices(route_id, raw_awards, db)
             enriched_awards = enrich_awards(xref["best_price_usd"], raw_awards)

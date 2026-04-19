@@ -15,13 +15,20 @@ router = APIRouter()
 
 
 class ConnectionManager:
+    MAX_CONNECTIONS_PER_USER = 5
+
     def __init__(self):
         # user_id → list of active WebSocket connections
         self._connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, user_id: str, ws: WebSocket):
+        conns = self._connections.get(user_id, [])
+        if len(conns) >= self.MAX_CONNECTIONS_PER_USER:
+            await ws.close(code=4009, reason="Too many connections")
+            return False
         await ws.accept()
         self._connections.setdefault(user_id, []).append(ws)
+        return True
 
     def disconnect(self, user_id: str, ws: WebSocket):
         conns = self._connections.get(user_id, [])
@@ -69,7 +76,9 @@ async def deals_ws(websocket: WebSocket):
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
-    await manager.connect(user_id, websocket)
+    connected = await manager.connect(user_id, websocket)
+    if not connected:
+        return
     try:
         while True:
             # Keep-alive: echo any message from client, send periodic pings

@@ -1,12 +1,14 @@
 """
 DAG factory — dynamically generates one DAG per active (route, cabin_class) pair.
 Reads active routes from the FlightDeal DB at import time (every Airflow scheduler cycle).
+Routes are cached for 60s to avoid blocking I/O on every scheduler heartbeat.
 
 Sources: SerpApi (scheduled) → Duffel + Seats.aero (on-demand when score ≥ 5.0)
 
 DAG ID format: scan_{route_id_short}_{cabin_class_lower}
 """
 import logging
+import time
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -35,9 +37,17 @@ DEFAULT_ARGS = {
     "email_on_failure":          False,
 }
 
+# ── Route caching (avoid blocking DB read on every scheduler heartbeat) ──────
+_ROUTES_CACHE: dict = {"data": [], "timestamp": 0}
+_ROUTES_CACHE_TTL = 60  # seconds
+
 
 def _get_active_routes() -> list[dict]:
-    """Reads active routes from the DB. Returns [] on connection failure."""
+    """Reads active routes from the DB. Cached for 60s to avoid blocking scheduler."""
+    now = time.time()
+    if _ROUTES_CACHE["data"] and (now - _ROUTES_CACHE["timestamp"]) < _ROUTES_CACHE_TTL:
+        return _ROUTES_CACHE["data"]
+
     try:
         import psycopg2, os
         url = os.environ["DATABASE_URL"].replace("+asyncpg", "").replace("+psycopg2", "")
@@ -51,10 +61,12 @@ def _get_active_routes() -> list[dict]:
         cols = [d[0] for d in cur.description]
         rows = [dict(zip(cols, row)) for row in cur.fetchall()]
         cur.close(); conn.close()
+        _ROUTES_CACHE["data"] = rows
+        _ROUTES_CACHE["timestamp"] = now
         return rows
     except Exception as exc:
         log.warning("Could not load routes from DB: %s", exc)
-        return []
+        return _ROUTES_CACHE.get("data", [])
 
 
 def _schedule_for_tier(tier: str) -> str:
@@ -76,6 +88,8 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
         schedule_interval=schedule,
         start_date=datetime(2026, 1, 1),
         catchup=False,
+        concurrency=4,         # max 4 tasks running in parallel for this DAG
+        max_active_runs=1,     # only 1 active run of this exact DAG at a time
         tags=["scan", cabin_class.lower(), route.get("priority_tier", "WARM").lower()],
         doc_md=f"Scan DAG for route '{route['name']}' — {cabin_class}",
     ) as dag:
@@ -92,6 +106,7 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
                 "deep":        True,
             },
             sla=timedelta(minutes=5),
+            execution_timeout=timedelta(minutes=10),
         )
 
         # ── Cross-reference (single source for now) ────────────────────────
@@ -147,11 +162,13 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
             task_id="enrich_duffel",
             python_callable=fetch_duffel.run,
             op_kwargs={"route_id": route_id, "cabin_class": cabin_class},
+            execution_timeout=timedelta(minutes=3),
         )
         t_awards = PythonOperator(
             task_id="enrich_awards",
             python_callable=fetch_awards.run,
             op_kwargs={"route_id": route_id, "cabin_class": cabin_class},
+            execution_timeout=timedelta(minutes=3),
             trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
         )
         t_alerts = PythonOperator(

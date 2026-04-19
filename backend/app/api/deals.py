@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import desc, select, func, and_
+from sqlalchemy import desc, select, func, and_, over
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -137,27 +137,20 @@ async def list_deals(
         .subquery()
     )
 
-    # ── Subquery: previous price for delta display ─────────────────────────────
-    from sqlalchemy.orm import aliased
-    prev = aliased(DealAnalysis, flat=True)
-    prev_price_sq = (
-        select(prev.best_price_usd)
-        .where(
-            prev.origin == DealAnalysis.origin,
-            prev.destination == DealAnalysis.destination,
-            prev.cabin_class == DealAnalysis.cabin_class,
-            prev.departure_date == DealAnalysis.departure_date,
-            prev.time < DealAnalysis.time,
-        )
-        .order_by(desc(prev.time))
-        .limit(1)
-        .correlate(DealAnalysis)
-        .scalar_subquery()
+    # ── Previous price via window function (replaces N+1 correlated subquery) ──
+    prev_price_col = func.lag(DealAnalysis.best_price_usd).over(
+        partition_by=[
+            DealAnalysis.origin,
+            DealAnalysis.destination,
+            DealAnalysis.cabin_class,
+            DealAnalysis.departure_date,
+        ],
+        order_by=DealAnalysis.time,
     )
 
     # ── Main query: join to get the full latest row per combo ─────────────────
     stmt = (
-        select(DealAnalysis, prev_price_sq.label("price_prev_usd"))
+        select(DealAnalysis, prev_price_col.label("price_prev_usd"))
         .join(
             latest_sq,
             and_(

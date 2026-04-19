@@ -74,7 +74,7 @@ async def search_award_availability(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
             resp = await client.get(
                 f"{BASE_URL}/search",
                 params=params,
