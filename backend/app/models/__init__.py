@@ -7,6 +7,14 @@ from app.models.program_baseline import ProgramBaseline
 from app.models.prices import GooglePrice, FlightOffer, DuffelPrice, AwardPrice
 from app.models.deal import DealAnalysis
 from app.models.scan_history import ScanHistory
+from app.models.route_event import RouteEvent
+from app.models.intelligence import (
+    PricePrediction,
+    PriceRegime,
+    ApiUsageLog,
+    ScoringWeights,
+    DealOutcome,
+)
 
 __all__ = [
     "User",
@@ -21,4 +29,10 @@ __all__ = [
     "AwardPrice",
     "DealAnalysis",
     "ScanHistory",
+    "RouteEvent",
+    "PricePrediction",
+    "PriceRegime",
+    "ApiUsageLog",
+    "ScoringWeights",
+    "DealOutcome",
 ]

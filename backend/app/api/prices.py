@@ -109,3 +109,80 @@ async def price_history(
         },
     )
     return [dict(row._mapping) for row in result]
+
+
+@router.get("/cheapest-dates/{route_id}")
+async def cheapest_dates(
+    route_id: uuid.UUID,
+    cabin_class: str = Query(...),
+    days_ahead: int = Query(60, le=180),
+    origin: str | None = Query(None),
+    destination: str | None = Query(None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Cheapest known price per departure_date in next N days.
+    Color level: cheap (≤ p25), normal, expensive (≥ p75). Powers CheapestDateStrip.
+    """
+    where_extras = []
+    params: dict = {
+        "route_id": str(route_id),
+        "cabin": cabin_class,
+        "days": days_ahead,
+    }
+    if origin:
+        where_extras.append("AND origin = :origin")
+        params["origin"] = origin
+    if destination:
+        where_extras.append("AND destination = :destination")
+        params["destination"] = destination
+    extras = " ".join(where_extras)
+
+    result = await db.execute(
+        text(f"""
+            SELECT
+                departure_date::text AS date,
+                MIN(best_price_usd)::float AS price,
+                COUNT(*) AS samples
+            FROM deal_analysis
+            WHERE route_id = :route_id
+              AND cabin_class = :cabin
+              AND departure_date >= CURRENT_DATE
+              AND departure_date <= CURRENT_DATE + make_interval(days => :days)
+              AND time >= NOW() - INTERVAL '14 days'
+              {extras}
+            GROUP BY departure_date
+            ORDER BY departure_date
+        """),
+        params,
+    )
+    rows = result.mappings().all()
+    if not rows:
+        return {"dates": [], "p25": None, "p75": None}
+
+    prices_sorted = sorted(float(r["price"]) for r in rows)
+    n = len(prices_sorted)
+    p25 = prices_sorted[max(0, n // 4 - 1)] if n >= 4 else prices_sorted[0]
+    p75 = prices_sorted[min(n - 1, (3 * n) // 4)] if n >= 4 else prices_sorted[-1]
+
+    def level(p: float) -> str:
+        if p <= p25:
+            return "cheap"
+        if p >= p75:
+            return "expensive"
+        return "normal"
+
+    return {
+        "dates": [
+            {
+                "date": r["date"],
+                "price": float(r["price"]),
+                "samples": int(r["samples"]),
+                "level": level(float(r["price"])),
+            }
+            for r in rows
+        ],
+        "p25": p25,
+        "p75": p75,
+    }

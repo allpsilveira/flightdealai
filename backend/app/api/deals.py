@@ -348,3 +348,80 @@ async def get_deal_enrichment(
             for a in awards
         ],
     )
+
+
+
+
+
+@router.get("/trip-comparison/{route_id}")
+async def trip_comparison(
+    route_id: uuid.UUID,
+    cabin_class: str = Query(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    For MONITOR routes: compares two-one-ways vs round-trip totals.
+    Returns {one_way_outbound, one_way_inbound, one_way_total,
+             round_trip_total, savings, savings_pct, recommendation}.
+    """
+    from app.models.route import Route
+
+    route = await db.get(Route, route_id)
+    if not route or route.user_id != user.id:
+        return {"error": "Route not found"}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+
+    # Cheapest one-way outbound (origin ? destination)
+    out_q = await db.execute(
+        select(func.min(DealAnalysis.best_price_usd)).where(
+            DealAnalysis.route_id == route_id,
+            DealAnalysis.origin.in_(route.origins),
+            DealAnalysis.destination.in_(route.destinations),
+            DealAnalysis.cabin_class == cabin_class,
+            DealAnalysis.time >= cutoff,
+        )
+    )
+    one_way_out = out_q.scalar_one_or_none()
+
+    # Cheapest one-way inbound (destination ? origin)
+    in_q = await db.execute(
+        select(func.min(DealAnalysis.best_price_usd)).where(
+            DealAnalysis.route_id == route_id,
+            DealAnalysis.origin.in_(route.destinations),
+            DealAnalysis.destination.in_(route.origins),
+            DealAnalysis.cabin_class == cabin_class,
+            DealAnalysis.time >= cutoff,
+        )
+    )
+    one_way_in = in_q.scalar_one_or_none()
+
+    one_way_total = (
+        float(one_way_out) + float(one_way_in)
+        if one_way_out and one_way_in else None
+    )
+
+    # Round-trip not yet stored separately — placeholder until RT scanner ships
+    round_trip_total = None
+
+    if one_way_total and round_trip_total:
+        savings = round_trip_total - one_way_total
+        savings_pct = (savings / round_trip_total) * 100 if round_trip_total else 0
+        recommendation = (
+            "two_one_ways" if savings > 0 else "round_trip"
+        )
+    else:
+        savings = None
+        savings_pct = None
+        recommendation = "two_one_ways" if one_way_total else "insufficient_data"
+
+    return {
+        "one_way_outbound": float(one_way_out) if one_way_out else None,
+        "one_way_inbound":  float(one_way_in) if one_way_in else None,
+        "one_way_total":    one_way_total,
+        "round_trip_total": round_trip_total,
+        "savings":          savings,
+        "savings_pct":      savings_pct,
+        "recommendation":   recommendation,
+    }

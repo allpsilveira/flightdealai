@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "./stores/useAuth";
+import { useDealsWebSocket } from "./hooks/useDealsWebSocket";
 import Layout from "./components/Layout";
 
 // Lazy-loaded pages — each becomes a separate chunk (reduces initial bundle ~60%)
@@ -21,6 +22,9 @@ function LoadingFallback() {
 
 function RequireAuth({ children }) {
   const token = useAuthStore((s) => s.accessToken);
+  // Open the live-deal WebSocket once the user is authenticated.
+  // Hook auto-reconnects with exponential backoff and tears down on logout.
+  useDealsWebSocket();
   return token ? children : <Navigate to="/login" replace />;
 }
 

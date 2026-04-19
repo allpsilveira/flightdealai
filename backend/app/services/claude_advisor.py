@@ -51,19 +51,30 @@ async def generate_recommendation(
     user_prompt = _build_prompt(deal, language)
 
     try:
+        from app.core.api_tracker import track_api_call
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model=model,
-            max_tokens=300,
-            system=[
-                {
-                    "type": "text",
-                    "text": _SYSTEM_PROMPT,
-                    "cache_control": {"type": "ephemeral"},   # prompt caching
-                }
-            ],
-            messages=[{"role": "user", "content": user_prompt}],
-        )
+        async with track_api_call("anthropic", endpoint=f"messages.{model}") as _t:
+            response = await client.messages.create(
+                model=model,
+                max_tokens=300,
+                system=[
+                    {
+                        "type": "text",
+                        "text": _SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},   # prompt caching
+                    }
+                ],
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            usage = getattr(response, "usage", None)
+            if usage:
+                in_t = getattr(usage, "input_tokens", 0) or 0
+                out_t = getattr(usage, "output_tokens", 0) or 0
+                # Sonnet pricing approx; Opus auto-bills higher
+                cost = (in_t / 1_000_000) * 3.0 + (out_t / 1_000_000) * 15.0
+                _t.set_cost(cost)
+                _t.set_metadata({"input_tokens": in_t, "output_tokens": out_t, "model": model})
+            _t.set_status(200)
         return response.content[0].text.strip()
     except Exception as exc:
         logger.warning("claude_recommendation_failed", error=str(exc))

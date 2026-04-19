@@ -5,7 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import get_settings
-from app.api import auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks
+from app.api import (
+    auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks,
+    events, intelligence,
+)
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -98,6 +101,8 @@ app.include_router(alerts.router,   prefix="/api/alerts",   tags=["alerts"])
 app.include_router(ws.router,       prefix="/ws",           tags=["websocket"])
 app.include_router(scan.router,     prefix="/api/scan",     tags=["scan"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(events.router,   prefix="/api/events",   tags=["events"])
+app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 
 
 @app.get("/api/health", tags=["health"])

@@ -5,6 +5,7 @@ Rate limit: 1,000 calls/day. Cost: $10/month flat.
 """
 import structlog
 import httpx
+from app.core.api_tracker import track_api_call
 from datetime import date
 from typing import Any
 
@@ -74,12 +75,14 @@ async def search_award_availability(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
-            resp = await client.get(
-                f"{BASE_URL}/search",
-                params=params,
-                headers=_headers(),
-            )
+        async with track_api_call("seats_aero", endpoint="search") as _t:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+                resp = await client.get(
+                    f"{BASE_URL}/search",
+                    params=params,
+                    headers=_headers(),
+                )
+            _t.set_status(resp.status_code)
             if resp.status_code != 200:
                 logger.error(
                     "seats_aero_http_error",
@@ -89,7 +92,8 @@ async def search_award_availability(
                 )
                 return None
             data = resp.json()
-        items = data.get("data", [])
+            items = data.get("data", [])
+            _t.set_metadata({"results": len(items)})
         logger.info("seats_aero_search_ok", origin=origin, destination=destination,
                     cabin=cabin_class, results=len(items))
         return [_normalize(item, origin, destination, departure_date, cabin_class)

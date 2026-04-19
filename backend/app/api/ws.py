@@ -53,6 +53,21 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+async def push_deal_update(user_id: str, deal: dict[str, Any]):
+    """Helper called by the pipeline after a fresh DealAnalysis is stored."""
+    await manager.broadcast_to_user(str(user_id), {"event": "deal_update", "data": deal})
+
+
+async def push_new_events(user_id: str, route_id: str, events: list[dict[str, Any]]):
+    """Helper called by the pipeline after generate_events writes new rows."""
+    if not events:
+        return
+    await manager.broadcast_to_user(
+        str(user_id),
+        {"event": "new_events", "route_id": str(route_id), "data": events},
+    )
+
+
 @router.websocket("/deals")
 async def deals_ws(websocket: WebSocket):
     """

@@ -12,6 +12,7 @@ import asyncio
 import random
 import structlog
 import httpx
+from app.core.api_tracker import track_api_call
 from datetime import date
 from typing import Any
 
@@ -85,25 +86,29 @@ async def search_flights(
     for attempt in range(3):
         try:
             async with _SEMAPHORE:
-                async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
-                    resp = await client.get(BASE_URL, params=params)
+                async with track_api_call("serpapi", endpoint="google_flights") as _t:
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+                        resp = await client.get(BASE_URL, params=params)
+                    _t.set_status(resp.status_code)
+                    status_code = resp.status_code
+                    resp_text = resp.text if resp.status_code != 200 else None
+                    data = resp.json() if resp.status_code == 200 else None
             # --- semaphore released before any sleep ---
-            if resp.status_code == 429:
+            if status_code == 429:
                 wait = (2 ** attempt) + random.uniform(0, 1)  # jitter to avoid thundering herd
                 logger.warning("serpapi_rate_limited", attempt=attempt + 1,
                                wait_s=wait, origin=origin, destination=destination)
                 await asyncio.sleep(wait)
                 continue              # retry
-            if resp.status_code != 200:
+            if status_code != 200:
                 logger.error(
                     "serpapi_http_error",
-                    status=resp.status_code,
-                    body=resp.text[:500],
+                    status=status_code,
+                    body=(resp_text or "")[:500],
                     origin=origin, destination=destination,
                     date=str(departure_date), cabin=cabin_class,
                 )
                 return None
-            data = resp.json()
             # SerpApi returns error field instead of HTTP error for some failures
             if "error" in data:
                 logger.error(

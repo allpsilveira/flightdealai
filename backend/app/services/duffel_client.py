@@ -36,30 +36,34 @@ async def enrich_offer(
 
     try:
         from duffel_api import Duffel
+        from app.core.api_tracker import track_api_call
         client = Duffel(access_token=settings.duffel_api_key)
 
-        offer_request = client.offer_requests.create(
-            {
-                "slices": [
-                    {
-                        "origin":         origin,
-                        "destination":    destination,
-                        "departure_date": departure_date.isoformat(),
-                    }
-                ],
-                "passengers":    [{"type": "adult"}],
-                "cabin_class":   CABIN_MAP.get(cabin_class, "business"),
-                "max_connections": 1,
-            }
-        )
+        async with track_api_call("duffel", endpoint="offer_requests") as _t:
+            offer_request = client.offer_requests.create(
+                {
+                    "slices": [
+                        {
+                            "origin":         origin,
+                            "destination":    destination,
+                            "departure_date": departure_date.isoformat(),
+                        }
+                    ],
+                    "passengers":    [{"type": "adult"}],
+                    "cabin_class":   CABIN_MAP.get(cabin_class, "business"),
+                    "max_connections": 1,
+                }
+            )
 
-        offers = list(offer_request.offers)
-        if not offers:
-            return None
+            offers = list(offer_request.offers)
+            _t.set_status(200 if offers else 204)
+            _t.set_metadata({"offers": len(offers)})
+            if not offers:
+                return None
 
-        # Pick cheapest offer
-        best = min(offers, key=lambda o: float(o.total_amount))
-        return _normalize(best, origin, destination, departure_date, cabin_class)
+            # Pick cheapest offer
+            best = min(offers, key=lambda o: float(o.total_amount))
+            return _normalize(best, origin, destination, departure_date, cabin_class)
 
     except Exception as exc:
         logger.error("duffel_enrich_failed", origin=origin, destination=destination,

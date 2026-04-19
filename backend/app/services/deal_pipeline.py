@@ -32,6 +32,11 @@ from app.services.award_analyzer import enrich_awards, best_award_summary
 from app.services import duffel_client, seats_aero_client
 from app.services.ingestion import store_duffel_price, store_award_prices, store_flight_offers
 from app.services import claude_advisor
+from app.services.event_generator import generate_events
+from app.services.intelligence import run_intelligence
+from app.api.ws import push_deal_update, push_new_events
+from app.models.route import Route
+from sqlalchemy import select, desc
 
 logger = structlog.get_logger(__name__)
 
@@ -169,6 +174,71 @@ async def run_pipeline(
     # ── Step 9: Store FlightOffers (linked to this DealAnalysis) ─────────────
     if offers:
         await store_flight_offers(route_id, offers, deal_id, db)
+
+    # ── Step 10: Generate route events (timeline) ────────────────────────────
+    events = []
+    try:
+        prev_q = await db.execute(
+            select(DealAnalysis)
+            .where(
+                DealAnalysis.route_id == route_id,
+                DealAnalysis.origin == origin,
+                DealAnalysis.destination == destination,
+                DealAnalysis.cabin_class == cabin_class,
+                DealAnalysis.departure_date == departure_date,
+                DealAnalysis.id != deal_id,
+            )
+            .order_by(desc(DealAnalysis.time))
+            .limit(1)
+        )
+        previous_deal = prev_q.scalar_one_or_none()
+
+        events = await generate_events(
+            db=db,
+            route_id=route_id,
+            deal=row,
+            previous_deal=previous_deal,
+            stats=stats,
+            previous_slope=None,
+            new_slope=slope,
+            is_first_scan=(previous_deal is None),
+        )
+        if events:
+            db.add_all(events)
+            await db.commit()
+    except Exception as exc:
+        logger.warning("event_generation_failed", error=str(exc))
+
+    # ── Step 11: Push WebSocket updates to the route owner ───────────────────
+    try:
+        route = await db.get(Route, route_id)
+        if route:
+            await push_deal_update(str(route.user_id), {
+                "id": str(deal_id),
+                "route_id": str(route_id),
+                "origin": origin,
+                "destination": destination,
+                "cabin_class": cabin_class,
+                "departure_date": str(departure_date),
+                "best_price_usd": float(xref["best_price_usd"]),
+                "score_total": float(final_score["score_total"]),
+                "action": final_score["action"],
+                "is_gem": bool(final_score.get("is_gem", False)),
+                "is_error_fare": bool(final_score.get("is_error_fare", False)),
+            })
+            if events:
+                await push_new_events(str(route.user_id), str(route_id), [
+                    {
+                        "event_type": e.event_type,
+                        "severity": e.severity,
+                        "headline": e.headline,
+                        "detail": e.detail,
+                        "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+                    }
+                    for e in events
+                ])
+    except Exception as exc:
+        logger.warning("websocket_push_failed", error=str(exc))
 
     logger.info(
         "pipeline_complete",

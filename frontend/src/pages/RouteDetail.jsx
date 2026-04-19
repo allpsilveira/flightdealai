@@ -12,6 +12,12 @@ import ActivityTimeline from "../components/ActivityTimeline";
 import AirlineLeaderboard from "../components/AirlineLeaderboard";
 import TicketDetailPanel from "../components/TicketDetailPanel";
 import FormattedText from "../components/FormattedText";
+import EnhancedPriceChart from "../components/EnhancedPriceChart";
+import CheapestDateStrip from "../components/CheapestDateStrip";
+import EventTimeline from "../components/EventTimeline";
+import IntelligencePanel from "../components/IntelligencePanel";
+import TripTypeComparison from "../components/TripTypeComparison";
+import AIInsightPanel from "../components/AIInsightPanel";
 import popularAirports from "../data/airports.json";
 
 const AIRPORT_MAP = Object.fromEntries(popularAirports.map((a) => [a.iata, a]));
@@ -80,6 +86,9 @@ export default function RouteDetail() {
   const [cabinFilter,    setCabinFilter]     = useState(null);
   const [deleting,       setDeleting]        = useState(false);
   const [timelineKey,    setTimelineKey]     = useState(0);
+  const [routeEvents,    setRouteEvents]     = useState([]);
+  const [forecast,       setForecast]        = useState(null);
+  const [timelineMode,   setTimelineMode]    = useState("events"); // events | scans
 
   const route = routes.find((r) => r.id === id) ?? null;
 
@@ -116,6 +125,23 @@ export default function RouteDetail() {
       params: { origin, destination: dest, cabin_class: cabin, days: historyDays },
     })
       .then((r) => setPriceHistory(r.data))
+
+  // Load route events (for timeline overlay on chart + EventTimeline component)
+  useEffect(() => {
+    if (!id) return;
+    api.get(`/events/route/${id}`, { params: { limit: 50 } })
+      .then((r) => setRouteEvents(r.data))
+      .catch(() => setRouteEvents([]));
+  }, [id, timelineKey]);
+
+  // Load forecast (best-effort; ignored if not enough history)
+  useEffect(() => {
+    if (!id || !route) return;
+    const cabin = cabinFilter ?? route.cabin_classes[0] ?? "BUSINESS";
+    api.get(`/intelligence/${id}/forecast`, { params: { cabin_class: cabin } })
+      .then((r) => setForecast(r.data))
+      .catch(() => setForecast(null));
+  }, [id, route, cabinFilter]);
       .catch(() => setPriceHistory([]))
       .finally(() => setHistoryLoading(false));
   }, [id, route, historyDays, cabinFilter]);
@@ -304,92 +330,81 @@ export default function RouteDetail() {
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">
                 Price History
               </p>
-              <div className="flex items-center gap-1.5">
-                {[7, 30, 60, 90].map((d) => (
+              {historyLoading && (
+                <span className="text-2xs text-zinc-400 animate-pulse">Loading…</span>
+              )}
+            </div>
+            <EnhancedPriceChart
+              history={priceHistory}
+              events={routeEvents}
+              forecast={forecast}
+              currentPrice={bestDeal?.best_price_usd}
+              defaultRangeDays={historyDays}
+              onRangeChange={setHistoryDays}
+            />
+          </div>
+
+          {/* Cheapest dates strip */}
+          <CheapestDateStrip
+            routeId={id}
+            cabinClass={cabinFilter ?? route?.cabin_classes?.[0] ?? "BUSINESS"}
+            origin={route?.origins?.[0]}
+            destination={route?.destinations?.[0]}
+            onSelectDate={(date) => {
+              const match = filteredDeals.find((d) => d.departure_date === date);
+              if (match) setSelectedDeal(match);
+            }}
+          />
+
+          {/* Activity Timeline (Events / Scans tabs) */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                Activity Timeline
+              </p>
+              <div className="flex items-center gap-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 p-0.5">
+                {[
+                  { key: "events", label: "Events" },
+                  { key: "scans",  label: "Scans" },
+                ].map(({ key, label }) => (
                   <button
-                    key={d}
-                    onClick={() => setHistoryDays(d)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
-                      historyDays === d
-                        ? "bg-brand-500 text-white border-brand-500"
-                        : "bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                    key={key}
+                    onClick={() => setTimelineMode(key)}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                      timelineMode === key
+                        ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm"
+                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                     }`}
                   >
-                    {d}d
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
-
-            {historyLoading ? (
-              <div className="h-56 flex items-center justify-center text-sm text-zinc-400 animate-pulse">
-                Loading…
-              </div>
-            ) : priceHistory.length === 0 ? (
-              <div className="h-56 flex flex-col items-center justify-center text-center">
-                <p className="text-sm font-medium text-zinc-900 dark:text-white mb-1">No data yet</p>
-                <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                  Price history will appear after the first scan.
-                </p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={priceHistory} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="bandGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#f26419" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#f26419" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="avgGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#f26419" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#f26419" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.06}/>
-                  <XAxis
-                    dataKey="bucket"
-                    tickFormatter={(v) => { try { return format(parseISO(v), "d MMM"); } catch { return v; } }}
-                    tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
-                  />
-                  <YAxis
-                    tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
-                    tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={45}
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="p90" name="P90" stroke="transparent" fill="url(#bandGrad)" legendType="none"/>
-                  <Area type="monotone" dataKey="p10" name="P10" stroke="transparent" fill="white" fillOpacity={0} legendType="none"/>
-                  <Area type="monotone" dataKey="avg_price" name="Avg" stroke="#f26419" strokeWidth={2} fill="url(#avgGrad)" dot={false}/>
-                  <Area type="monotone" dataKey="min_price" name="Min" stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 2" fill="transparent" dot={false}/>
-                  {bestDeal?.best_price_usd && (
-                    <ReferenceLine
-                      y={bestDeal.best_price_usd}
-                      stroke="#f5c842"
-                      strokeDasharray="4 4"
-                      label={{ value: `Now $${Math.round(bestDeal.best_price_usd / 1000)}k`, fill: "#f5c842", fontSize: 10 }}
-                    />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          {/* Activity Timeline */}
-          <div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white mb-3">
-              Activity Timeline
-            </p>
             <div className="card p-4">
-              <ActivityTimeline
-                routeId={id}
-                refreshKey={timelineKey}
-                onEventClick={(event) => {
-                  // Find matching deal by deal_analysis_id if available
-                  if (event.deal_analysis_id) {
-                    const match = deals.find((d) => d.id === event.deal_analysis_id);
-                    if (match) setSelectedDeal(match);
-                  }
-                }}
-              />
+              {timelineMode === "events" ? (
+                <EventTimeline
+                  routeId={id}
+                  refreshKey={timelineKey}
+                  onEventClick={(event) => {
+                    if (event.deal_analysis_id) {
+                      const match = deals.find((d) => d.id === event.deal_analysis_id);
+                      if (match) setSelectedDeal(match);
+                    }
+                  }}
+                />
+              ) : (
+                <ActivityTimeline
+                  routeId={id}
+                  refreshKey={timelineKey}
+                  onEventClick={(event) => {
+                    if (event.deal_analysis_id) {
+                      const match = deals.find((d) => d.id === event.deal_analysis_id);
+                      if (match) setSelectedDeal(match);
+                    }
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -437,15 +452,24 @@ export default function RouteDetail() {
             </div>
           )}
 
-          {/* AI insight */}
-          {bestDeal?.ai_recommendation_en && (
-            <div className="card p-4">
-              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
-                AI Analysis
-              </p>
-              <FormattedText text={bestDeal.ai_recommendation_en} />
-            </div>
+          {/* Intelligence (regime, forecast, cycle, dow, lead-time, verdict) */}
+          <IntelligencePanel
+            routeId={id}
+            cabinClass={cabinFilter ?? route?.cabin_classes?.[0] ?? "BUSINESS"}
+            origin={route?.origins?.[0]}
+            destination={route?.destinations?.[0]}
+          />
+
+          {/* Trip type comparison (only meaningful for MONITOR routes) */}
+          {route?.trip_type === "MONITOR" && (
+            <TripTypeComparison
+              routeId={id}
+              cabinClass={cabinFilter ?? route?.cabin_classes?.[0] ?? "BUSINESS"}
+            />
           )}
+
+          {/* AI insight */}
+          <AIInsightPanel deal={bestDeal} language="en" />
 
           {/* Route stats */}
           {filteredDeals.length > 0 && (
