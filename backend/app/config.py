@@ -1,5 +1,17 @@
+import logging
+import sys
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+_INSECURE_JWT_DEFAULTS = {
+    "insecure-dev-secret-change-in-prod",
+    "changeme",
+    "secret",
+    "",
+}
 
 
 class Settings(BaseSettings):
@@ -37,7 +49,28 @@ class Settings(BaseSettings):
     app_domain: str = "localhost"
     debug: bool = False
 
+    def validate_production_secrets(self) -> None:
+        """Refuse to start in production with insecure defaults."""
+        if self.debug:
+            return  # skip checks in dev mode
+        if self.app_domain != "localhost":
+            # We are in production — enforce real secrets
+            if self.jwt_secret in _INSECURE_JWT_DEFAULTS:
+                logger.critical(
+                    "FATAL: JWT_SECRET is not set or uses an insecure default. "
+                    "Set a strong JWT_SECRET in .env before deploying."
+                )
+                sys.exit(1)
+            if "postgres:postgres" in self.database_url:
+                logger.critical(
+                    "FATAL: DATABASE_URL uses default postgres credentials. "
+                    "Set a strong DB_PASSWORD in .env before deploying."
+                )
+                sys.exit(1)
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    settings.validate_production_secrets()
+    return settings

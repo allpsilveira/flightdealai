@@ -69,10 +69,10 @@ def _build_payload(deal: dict, rec: str | None, language: str) -> dict:
 
     if language == "pt":
         title = f"{'✦ GEM · ' if is_gem else ''}{action.replace('_', ' ')} — {origin}→{dest}"
-        body  = f"{cabin} · ${price:,.0f} · Pontuação {score:.0f}/170"
+        body  = f"{cabin} · ${price:,.0f} · Pontuação {score:.1f}/10"
     else:
         title = f"{'✦ GEM Deal · ' if is_gem else ''}{action.replace('_', ' ')} — {origin}→{dest}"
-        body  = f"{cabin} · ${price:,.0f} · Score {score:.0f}/170"
+        body  = f"{cabin} · ${price:,.0f} · Score {score:.1f}/10"
 
     if rec:
         body = rec[:120] + ("…" if len(rec) > 120 else "")

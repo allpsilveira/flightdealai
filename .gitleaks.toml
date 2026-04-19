@@ -1,0 +1,47 @@
+# Gitleaks configuration for FlyLuxuryDeals
+# Extends the default ruleset with project-specific patterns
+
+title = "FlyLuxuryDeals Secret Scanner"
+
+[extend]
+# Use the default gitleaks ruleset as a base
+useDefault = true
+
+# ── Custom rules for our specific API keys ──────────────────────────────
+
+[[rules]]
+id = "serpapi-api-key"
+description = "SerpApi API Key"
+regex = '''(?i)serpapi[_\-]?(api[_\-]?)?key\s*[=:]\s*['"]?[a-f0-9]{40,}['"]?'''
+tags = ["api-key", "serpapi"]
+
+[[rules]]
+id = "duffel-api-key"
+description = "Duffel API Key (live or test)"
+regex = '''duffel_(live|test)_[A-Za-z0-9_-]{20,}'''
+tags = ["api-key", "duffel"]
+
+[[rules]]
+id = "seats-aero-api-key"
+description = "Seats.aero Pro API Key"
+regex = '''pro_[A-Za-z0-9]{20,}'''
+tags = ["api-key", "seats-aero"]
+
+[[rules]]
+id = "twilio-auth-token"
+description = "Twilio Auth Token"
+regex = '''(?i)twilio[_\-]?auth[_\-]?token\s*[=:]\s*['"]?[a-f0-9]{32}['"]?'''
+tags = ["api-key", "twilio"]
+
+# ── Allowlist ────────────────────────────────────────────────────────────
+
+[allowlist]
+description = "Files that are safe to have key-like patterns"
+paths = [
+  '''\.env\.example$''',
+  '''docs/.*\.md$''',
+  '''CLAUDE\.md$''',
+  '''backend/app/config\.py$''',
+  '''\.pre-commit-config\.yaml$''',
+  '''\.gitleaks\.toml$''',
+]

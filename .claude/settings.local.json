@@ -40,7 +40,10 @@
       "Read(//c/Users/caned/AppData/Roaming/uv/python//**)",
       "Read(//c/Users/caned/AppData/Local/Programs/**)",
       "Bash(\"/c/Users/caned/AppData/Roaming/uv/python/cpython-3.14.4-windows-x86_64-none/python.exe\" -c \"import ast; print\\('Python works'\\)\")",
-      "Bash(/c/Users/caned/AppData/Roaming/uv/python/cpython-3.14.4-windows-x86_64-none/python.exe -c ':*)"
+      "Bash(/c/Users/caned/AppData/Roaming/uv/python/cpython-3.14.4-windows-x86_64-none/python.exe -c ':*)",
+      "Bash(git commit:*)",
+      "Bash(py --version)",
+      "Bash(python -c ':*)"
     ]
   }
 }

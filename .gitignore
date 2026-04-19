@@ -1,7 +1,32 @@
-# Environment — never commit secrets
+# ══════════════════════════════════════════════════════════════════════════════
+# SECRETS & ENVIRONMENT — never commit these
+# ══════════════════════════════════════════════════════════════════════════════
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+*.env
+
+# API keys, tokens, credentials (catch-all patterns)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+id_rsa
+id_dsa
+*.secret
+credentials.json
+service-account*.json
+token.json
 
 # Python
 __pycache__/
@@ -39,3 +64,9 @@ backend/alembic/__pycache__/
 
 # Nginx SSL certs (generated on server)
 nginx/ssl/
+
+# Backup files that might contain secrets
+*.sql
+*.dump
+*.bak
+*.backup

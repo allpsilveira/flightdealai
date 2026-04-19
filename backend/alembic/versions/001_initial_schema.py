@@ -56,7 +56,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("route_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("routes.id", ondelete="CASCADE"), nullable=True),
-        sa.Column("score_threshold", sa.Integer, nullable=False, server_default="80"),
+        sa.Column("score_threshold", sa.Integer, nullable=False, server_default="5"),
         sa.Column("gem_alerts", sa.Boolean, nullable=False, server_default="true"),
         sa.Column("scarcity_alerts", sa.Boolean, nullable=False, server_default="true"),
         sa.Column("trend_reversal_alerts", sa.Boolean, nullable=False, server_default="false"),

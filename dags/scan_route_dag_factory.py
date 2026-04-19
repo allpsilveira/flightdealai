@@ -2,7 +2,7 @@
 DAG factory — dynamically generates one DAG per active (route, cabin_class) pair.
 Reads active routes from the FlightDeal DB at import time (every Airflow scheduler cycle).
 
-Sources: SerpApi (scheduled) → Duffel + Seats.aero (on-demand when score ≥ 80)
+Sources: SerpApi (scheduled) → Duffel + Seats.aero (on-demand when score ≥ 5.0)
 
 DAG ID format: scan_{route_id_short}_{cabin_class_lower}
 """
@@ -108,10 +108,10 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
             op_kwargs={"route_id": route_id, "cabin_class": cabin_class},
         )
 
-        # ── Branch: score ≥ 50 → AI analysis, else skip ───────────────────
+        # ── Branch: score ≥ 3.0 → AI analysis, else skip ───────────────────
         def _branch_score(**ctx):
             score = ctx["ti"].xcom_pull(task_ids="score_deal", key="score_total") or 0
-            return "ai_analysis" if float(score) >= 50 else "log_skip"
+            return "ai_analysis" if float(score) >= 3.0 else "log_skip"
 
         t_branch = BranchPythonOperator(
             task_id="branch_score",
@@ -119,7 +119,7 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
         )
         t_log_skip = PythonOperator(
             task_id="log_skip",
-            python_callable=lambda **_: log.info("Score < 50, skipping"),
+            python_callable=lambda **_: log.info("Score < 3.0, skipping"),
         )
 
         # ── AI analysis ────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 """
 Duffel client — Tier 3 on-demand fare brand enrichment.
-ONLY called when a deal is detected (score ≥ 80 or GEM flag).
+ONLY called when a deal is detected (score ≥ 5.0 or GEM flag).
 Cost: $0.005/search. Rate limit: 120 req/60s.
 """
 import structlog

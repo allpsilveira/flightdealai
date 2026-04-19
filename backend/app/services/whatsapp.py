@@ -82,7 +82,7 @@ def _format_deal_message(deal: dict, rec: str | None, language: str) -> str:
         msg = (
             f"{'✦ OFERTA GEM — ' if is_gem else ''}{action.replace('_', ' ')}\n"
             f"✈️ {origin} → {dest} ({cabin})\n"
-            f"💰 ${price:,.0f} · Pontuação: {score:.0f}/170"
+            f"💰 ${price:,.0f} · Pontuação: {score:.1f}/10"
             f"{seat_line}\n"
         )
     else:
@@ -90,7 +90,7 @@ def _format_deal_message(deal: dict, rec: str | None, language: str) -> str:
         msg = (
             f"{'✦ GEM DEAL — ' if is_gem else ''}{action.replace('_', ' ')}\n"
             f"✈️ {origin} → {dest} ({cabin})\n"
-            f"💰 ${price:,.0f} · Score: {score:.0f}/170"
+            f"💰 ${price:,.0f} · Score: {score:.1f}/10"
             f"{seat_line}\n"
         )
 

@@ -19,7 +19,7 @@ class AlertRule(Base):
     route_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("routes.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    score_threshold: Mapped[int] = mapped_column(Integer, default=80, nullable=False)
+    score_threshold: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     gem_alerts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     scarcity_alerts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     trend_reversal_alerts: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

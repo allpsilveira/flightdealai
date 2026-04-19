@@ -18,10 +18,11 @@ def score_deal(
     extra:          dict[str, Any] | None = None,  # price_slope_7d, arbitrage_pct
 ) -> dict[str, Any]:
     """
-    Computes the full deal score (0–170 points) from cross-reference + stats.
+    Computes the full deal score (0.0–10.0) from cross-reference + stats.
 
+    Sub-scores are computed on their natural scales (see helpers below), then the
+    raw sum (max 170) is normalized to 0.0–10.0 by dividing by 17.
     Returns the score breakdown dict that maps 1:1 to DealAnalysis columns.
-    Phase 3 will fill in all sub-scores; Phase 1 stub computes what it can.
     """
     best_price = xref.get("best_price_usd")
     if not best_price:
@@ -39,9 +40,12 @@ def score_deal(
     score_scarcity      = _score_scarcity(xref.get("seats_remaining"))
     score_award         = _score_award(best_price, award_results)
 
-    total = (score_percentile + score_zscore + score_trend_align + score_trend_dir
-             + score_cross_source + score_arbitrage + score_fare_brand
-             + score_scarcity + score_award)
+    raw = (score_percentile + score_zscore + score_trend_align + score_trend_dir
+           + score_cross_source + score_arbitrage + score_fare_brand
+           + score_scarcity + score_award)
+
+    # Normalize to 0.0–10.0 (max raw = 170)
+    total = round(raw / 17.0, 1)
 
     # z-score raw value for error-fare detection
     zscore_raw = _zscore_raw(best_price, daily_stats)
@@ -243,10 +247,11 @@ def _score_award(cash_price: float, awards: list[dict] | None) -> float:
 
 
 def _action(total: float, is_gem: bool) -> str:
-    if is_gem or total >= 100: return "STRONG_BUY"
-    if total >= 80:            return "BUY"
-    if total >= 60:            return "WATCH"
-    if total >= 40:            return "NORMAL"
+    """Map normalized 0.0–10.0 score to action label."""
+    if is_gem or total >= 6.0: return "STRONG_BUY"
+    if total >= 5.0:           return "BUY"
+    if total >= 4.0:           return "WATCH"
+    if total >= 2.5:           return "NORMAL"
     return "SKIP"
 
 

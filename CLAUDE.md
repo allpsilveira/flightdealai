@@ -142,7 +142,7 @@ TOTAL: ~$37/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2.25)
 
 **No hardcoded price thresholds. Everything is percentile/z-score based.**
 
-### Cash Score (0-120 points):
+### Cash Score (0–87 raw points, normalized to 0–5.1 on the 0–10 scale):
 1. **Percentile Position (0-30):** Where does price fall in 90-day distribution? Bottom 5%=30, 10%=25, 20%=20, 30%=15, 40%=10, median=5, above=0
 2. **Z-Score Signal (0-20):** How many std devs below mean? ≥2.5=20 (anomaly/error fare), ≥2.0=16, ≥1.5=12, ≥1.0=8, ≥0.5=4
 3. **Google Trend Alignment (0-15):** Price vs typical_price_range midpoint. Also +3 bonus if price_level="low", -3 if "high"
@@ -152,10 +152,12 @@ TOTAL: ~$37/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2.25)
 7. **Fare Brand Value (0-10):** Business Lite detected at >30% below standard = 10
 8. **Scarcity (0-5):** 1 seat=5, ≤3=4, ≤5=2, ≤10=1
 
-### Award Score (0-50 bonus, when available):
+### Award Score (0–50 raw bonus, normalized to 0–2.9 on the 0–10 scale, when available):
 1. **CPP Value (0-20):** cash_price / miles_cost vs baseline CPP per program. ≥5x=20, ≥3x=15, ≥2x=10
 2. **Award Scarcity (0-15):** 1 seat=15, 2=10, ≤4=5
 3. **Program Accessibility (0-15):** Transferable from 3+ card programs=15, 2=12, 1=8
+
+**Normalization:** raw_total (max 170) / 17 = `score_total` on 0.0–10.0 scale.
 
 ### Cold Start (first 30 days):
 - Days 0-3: Use SerpApi typical_price_range only, no scoring, data collection mode
@@ -164,11 +166,11 @@ TOTAL: ~$37/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2.25)
 - Days 30+: Self-sufficient from own TimescaleDB percentiles
 
 ### Actions:
-- 100+ → STRONG_BUY (all alerts fire)
-- 80-99 → BUY (primary alerts)
-- 60-79 → WATCH (dashboard only)
-- 40-59 → NORMAL (log)
-- <40 → SKIP
+- 6.0+ → STRONG_BUY (all alerts fire)
+- 5.0–5.9 → BUY (primary alerts)
+- 4.0–4.9 → WATCH (dashboard only)
+- 2.5–3.9 → NORMAL (log)
+- <2.5 → SKIP
 - GEM flag → always alert regardless of score
 - z-score >2.5 → flag as POSSIBLE ERROR FARE → always alert
 
@@ -200,7 +202,7 @@ fetch_serpapi ──→ cross_reference ──→ score_deal ──→ generate_
 ```
 
 **Key Airflow features used:**
-- BranchPythonOperator (score ≥50 → AI; action BUY/GEM → enrich)
+- BranchPythonOperator (score ≥3.0 → AI; action BUY/GEM → enrich)
 - XCom (pass data between tasks — google_result, xref_summary, score_total, deal_id)
 - trigger_rule=NONE_FAILED_MIN_ONE_SUCCESS (graceful degradation)
 - retries=3 with exponential backoff per task
