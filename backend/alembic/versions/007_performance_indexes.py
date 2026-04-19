@@ -7,8 +7,8 @@ Create Date: 2026-04-19
 from alembic import op
 import sqlalchemy as sa
 
-revision = "007_performance_indexes"
-down_revision = "006_route_drive_hours"
+revision = "007"
+down_revision = "006"
 branch_labels = None
 depends_on = None
 
