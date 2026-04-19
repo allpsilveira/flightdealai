@@ -201,27 +201,38 @@ async def run_pipeline_batch(
         combo_key = f"{best['origin']}|{best['destination']}|{best['cabin_class']}|{best['departure_date']}"
         offers = all_offers_map.get(combo_key, [])
 
-        result = await run_pipeline(
-            route_id=route_id,
-            origin=best["origin"],
-            destination=best["destination"],
-            departure_date=date.fromisoformat(best["departure_date"]),
-            cabin_class=best["cabin_class"],
-            google_result={
-                "price_usd":          best["price_usd"],
-                "price_level":        best.get("price_level"),
-                "airline_codes":      best.get("airline_codes", []),
-                "typical_price_low":  best.get("typical_price_low"),
-                "typical_price_high": best.get("typical_price_high"),
-                "is_direct":          best.get("is_direct", False),
-                "price_history":      None,
-            },
-            db=db,
-            user_language=user_language,
-            force_enrich=force_enrich,
-            offers=offers,
-        )
-        if result:
-            deals.append(result)
+        try:
+            result = await run_pipeline(
+                route_id=route_id,
+                origin=best["origin"],
+                destination=best["destination"],
+                departure_date=date.fromisoformat(best["departure_date"]),
+                cabin_class=best["cabin_class"],
+                google_result={
+                    "price_usd":          best["price_usd"],
+                    "price_level":        best.get("price_level"),
+                    "airline_codes":      best.get("airline_codes", []),
+                    "typical_price_low":  best.get("typical_price_low"),
+                    "typical_price_high": best.get("typical_price_high"),
+                    "is_direct":          best.get("is_direct", False),
+                    "price_history":      None,
+                },
+                db=db,
+                user_language=user_language,
+                force_enrich=force_enrich,
+                offers=offers,
+            )
+            if result:
+                deals.append(result)
+        except Exception as exc:
+            logger.error(
+                "pipeline_combo_failed",
+                origin=best["origin"],
+                destination=best["destination"],
+                cabin=best["cabin_class"],
+                date=best["departure_date"],
+                error=str(exc),
+            )
+            continue
 
     return deals
