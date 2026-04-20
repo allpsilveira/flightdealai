@@ -242,7 +242,29 @@ async def explain_deal_endpoint(
         "best_award_program":    deal.best_award_program,
         "best_cpp":              deal.best_cpp,
     }
-    return explain_deal(payload)
+    out = explain_deal(payload)
+
+    # Augment with ML signals (forecast / anomaly / expected-price) when models exist.
+    try:
+        from app.services.ml.scorer import signals_for_deal, ml_drivers
+        signals = signals_for_deal({
+            "route_id": deal.route_id,
+            "cabin_class": deal.cabin_class,
+            "origin": deal.origin,
+            "destination": deal.destination,
+            "airline_code": deal.airline_code,
+            "price": deal.best_price_usd,
+            "departure_date": deal.departure_date,
+        })
+        if signals.get("available"):
+            out["ml_signals"] = signals
+            out["drivers"] = (out.get("drivers") or []) + ml_drivers(signals)
+    except Exception as e:
+        # ML is best-effort — never block the explain endpoint
+        import structlog
+        structlog.get_logger(__name__).warning("ml_signals_failed", error=str(e))
+
+    return out
 
 
 @router.get("/offers/route/{route_id}", response_model=list[FlightOfferResponse])

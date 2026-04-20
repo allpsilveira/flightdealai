@@ -39,3 +39,9 @@ scipy==1.13.1
 scikit-learn==1.5.0
 xgboost==2.0.3
 orjson==3.10.3
+
+# ── ML stack (Phase 4) ───────────────────────────────────────────────────────
+statsforecast==1.7.5       # AutoARIMA / ETS / Theta — short-term price forecast
+lightgbm==4.3.0            # Expected-price gradient boost (route × cabin × dow)
+shap==0.45.1               # Per-deal feature attributions for plain-English drivers
+joblib==1.4.2              # Model persistence
