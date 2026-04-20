@@ -127,8 +127,8 @@ export default function EnhancedPriceChart({
               onClick={() => handleRange(r)}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                 range === r
-                  ? "bg-brand-500 text-white border-brand-500"
-                  : "bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                  ? "bg-champagne/15 text-champagne border-champagne/30"
+                  : "text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700"
               }`}
             >
               {r === "ALL" ? "All" : `${r}d`}

@@ -84,21 +84,43 @@ async def price_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Returns daily price stats from the continuous aggregate view."""
+    """
+    Daily price series for the route chart.
+
+    Reads directly from deal_analysis (not the continuous aggregate) so a fresh
+    scan shows up immediately, even with only 1 sample.
+
+    For each scan-day we keep the *latest* scan per departure_date — so a manual
+    "Scan Now" issued after the scheduled scan supersedes it for that day. Then
+    we aggregate across departure_dates within the scan-day for chart stats.
+    """
     result = await db.execute(
         text("""
+            WITH latest_per_day_per_dep AS (
+                SELECT DISTINCT ON (date_trunc('day', time), departure_date)
+                    date_trunc('day', time) AS scan_day,
+                    departure_date,
+                    best_price_usd
+                FROM deal_analysis
+                WHERE route_id = :route_id
+                  AND origin = :origin
+                  AND destination = :destination
+                  AND cabin_class = :cabin_class
+                  AND time >= NOW() - make_interval(days => :days)
+                ORDER BY date_trunc('day', time), departure_date, time DESC
+            )
             SELECT
-                bucket::text,
-                min_price, avg_price, max_price,
-                p10, p50, p90,
-                sample_count
-            FROM price_daily_stats
-            WHERE route_id = :route_id
-              AND origin = :origin
-              AND destination = :destination
-              AND cabin_class = :cabin_class
-              AND bucket >= NOW() - make_interval(days => :days)
-            ORDER BY bucket ASC
+                scan_day::text                              AS bucket,
+                MIN(best_price_usd)::float                  AS min_price,
+                AVG(best_price_usd)::float                  AS avg_price,
+                MAX(best_price_usd)::float                  AS max_price,
+                percentile_cont(0.10) WITHIN GROUP (ORDER BY best_price_usd)::float AS p10,
+                percentile_cont(0.50) WITHIN GROUP (ORDER BY best_price_usd)::float AS p50,
+                percentile_cont(0.90) WITHIN GROUP (ORDER BY best_price_usd)::float AS p90,
+                COUNT(*)::int                               AS sample_count
+            FROM latest_per_day_per_dep
+            GROUP BY scan_day
+            ORDER BY scan_day ASC
         """),
         {
             "route_id": str(route_id),

@@ -456,7 +456,7 @@ export default function RouteDetail() {
 
           {/* Airline leaderboard */}
           <div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white mb-3">
+            <p className="text-2xs font-semibold text-zinc-500 uppercase tracking-[0.15em] mb-3">
               Airline Prices
             </p>
             <div className="card p-2">
@@ -472,21 +472,21 @@ export default function RouteDetail() {
 
           {/* Best award option */}
           {bestDeal?.best_award_miles && (
-            <div className="card p-4">
-              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
+            <div className="card p-5">
+              <p className="text-2xs font-semibold text-zinc-500 uppercase tracking-[0.15em] mb-3">
                 Best Award
               </p>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  <p className="text-sm font-semibold text-zinc-100">
                     {bestDeal.best_award_miles.toLocaleString()} miles
                   </p>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
+                  <p className="text-xs text-zinc-500 mt-0.5">
                     via {bestDeal.best_award_program}
                   </p>
                 </div>
                 {bestDeal.best_cpp && (
-                  <span className="text-sm font-bold text-brand-500">
+                  <span className="text-sm font-bold text-champagne">
                     {bestDeal.best_cpp.toFixed(1)}¢/pt
                   </span>
                 )}
@@ -515,8 +515,8 @@ export default function RouteDetail() {
 
           {/* Route stats */}
           {filteredDeals.length > 0 && (
-            <div className="card p-4 space-y-3">
-              <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+            <div className="card p-5 space-y-4">
+              <p className="text-2xs font-semibold text-zinc-500 uppercase tracking-[0.15em]">
                 Route Stats
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -526,9 +526,9 @@ export default function RouteDetail() {
                   { label: "Top score",   value: `${Math.round((Math.max(...filteredDeals.map(d => d.score_total)) / 170) * 100)}/100` },
                   { label: "GEM deals",  value: filteredDeals.filter(d => d.is_gem).length },
                 ].map(({ label, value }) => (
-                  <div key={label} className="text-center px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800">
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-0.5">{label}</p>
-                    <p className="text-base font-semibold text-zinc-900 dark:text-white tabular-nums">{value}</p>
+                  <div key={label} className="px-3 py-3 rounded-lg bg-zinc-900/40 border border-zinc-800">
+                    <p className="text-2xs text-zinc-500 uppercase tracking-wider">{label}</p>
+                    <p className="text-xl font-serif text-champagne tabular-nums mt-1">{value}</p>
                   </div>
                 ))}
               </div>

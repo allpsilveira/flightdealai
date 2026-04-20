@@ -129,7 +129,10 @@ async def scan_route(
       all_offers:  dict keyed by (origin, dest, cabin, date_str) →
                    list of individual offers per airline+stops
     """
-    scan_dates = _date_range(date_from, date_to, max_dates=3)
+    # Deep scans (manual "Scan Now" + 3×/day full scans) sample more dates
+    # for better coverage. Quick scans (every 4h tripwire) stay sparse to save API budget.
+    max_dates = 7 if deep else 3
+    scan_dates = _date_range(date_from, date_to, max_dates=max_dates)
 
     total = len(origins) * len(destinations) * len(cabin_classes) * len(scan_dates)
     logger.info(

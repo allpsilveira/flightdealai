@@ -41,11 +41,11 @@ const TRIGGER_CONFIG = {
   manual: {
     label:      "You · Scan Now",
     sublabel:   "Manual scan",
-    dotBg:      "bg-brand-500",
-    iconBg:     "bg-brand-500",
-    iconColor:  "text-white",
-    badgeBg:    "bg-brand-50 dark:bg-brand-500/15",
-    badgeText:  "text-brand-600 dark:text-brand-400",
+    dotBg:      "bg-champagne",
+    iconBg:     "bg-champagne/20",
+    iconColor:  "text-champagne",
+    badgeBg:    "bg-champagne/10 border border-champagne/30",
+    badgeText:  "text-champagne",
     Icon:       IconUser,
   },
   scheduled: {
@@ -137,12 +137,12 @@ export default function ActivityTimeline({ routeId, onEventClick, refreshKey = 0
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1.5
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5
                 ${filter === key
                   ? key === "error"
-                    ? "bg-red-500 text-white"
-                    : "bg-brand-500 text-white"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    ? "bg-red-500/15 text-red-300 border border-red-500/30"
+                    : "bg-champagne/15 text-champagne border border-champagne/30"
+                  : "border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
                 }`}
             >
               {label}
@@ -158,8 +158,7 @@ export default function ActivityTimeline({ routeId, onEventClick, refreshKey = 0
         {/* Reload button */}
         <button
           onClick={reload}
-          className="ml-auto text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600
-                     dark:hover:text-zinc-300 transition-colors"
+          className="ml-auto text-xs text-zinc-500 hover:text-champagne transition-colors"
           title="Refresh timeline"
         >
           ↺ Refresh
@@ -198,7 +197,7 @@ export default function ActivityTimeline({ routeId, onEventClick, refreshKey = 0
           ) : (
             <>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white mb-1">No results for this filter</p>
-              <button onClick={() => setFilter("all")} className="text-xs text-brand-500 hover:underline mt-1">
+              <button onClick={() => setFilter("all")} className="text-xs text-champagne hover:text-champagne/80 mt-1">
                 Show all
               </button>
             </>

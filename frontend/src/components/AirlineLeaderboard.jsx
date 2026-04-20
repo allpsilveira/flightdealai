@@ -129,8 +129,8 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
               key={`${code}-${offer.stops}-${i}`}
               className={`flex items-center gap-2 px-3 py-3 transition-all ${
                 isSelected
-                  ? "bg-brand-50 dark:bg-brand-500/10"
-                  : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  ? "bg-champagne/10 border-l-2 border-champagne"
+                  : "hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
               }`}
             >
               {/* Rank */}
@@ -203,7 +203,7 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
                 {skyScanUrl && (
                   <a href={skyScanUrl} target="_blank" rel="noopener noreferrer"
                      onClick={(e) => e.stopPropagation()}
-                     className="text-2xs text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium">
+                     className="text-2xs text-champagne/80 hover:text-champagne font-medium">
                     Search ↗
                   </a>
                 )}
