@@ -70,8 +70,15 @@ async def generate_recommendation(
             if usage:
                 in_t = getattr(usage, "input_tokens", 0) or 0
                 out_t = getattr(usage, "output_tokens", 0) or 0
-                # Sonnet pricing approx; Opus auto-bills higher
-                cost = (in_t / 1_000_000) * 3.0 + (out_t / 1_000_000) * 15.0
+                # Per-model pricing (USD per million tokens) — keep in sync with Anthropic's pricing page
+                _RATES = {
+                    "opus":   (15.0, 75.0),  # Opus 4.x — input, output
+                    "sonnet": (3.0,  15.0),  # Sonnet 4.x
+                    "haiku":  (0.80, 4.0),   # Haiku 4.x
+                }
+                family = "opus" if "opus" in model else "haiku" if "haiku" in model else "sonnet"
+                in_rate, out_rate = _RATES[family]
+                cost = (in_t / 1_000_000) * in_rate + (out_t / 1_000_000) * out_rate
                 _t.set_cost(cost)
                 _t.set_metadata({"input_tokens": in_t, "output_tokens": out_t, "model": model})
             _t.set_status(200)
