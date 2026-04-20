@@ -56,6 +56,21 @@ function AirportList({ codes }) {
   );
 }
 
+/** Headline variant: large city name(s) with small IATA underneath */
+function AirportHeadline({ codes }) {
+  return (
+    <span className="inline-flex items-baseline flex-wrap gap-x-2">
+      {codes.map((code, i) => (
+        <span key={code} className="inline-flex items-baseline gap-1.5">
+          {i > 0 && <span className="text-zinc-600 text-2xl font-light">·</span>}
+          <span title={code} className="text-zinc-100">{cityName(code)}</span>
+          <span className="text-champagne/50 text-sm font-sans tracking-wider tabular-nums">{code}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -204,118 +219,145 @@ export default function RouteDetail() {
   return (
     <div className="min-h-0">
       {/* ── Route header ──────────────────────────────────────────────── */}
-      <div className="px-6 sm:px-8 py-5 border-b border-zinc-200 dark:border-zinc-800
-                      bg-white dark:bg-zinc-900 flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              onClick={() => navigate("/")}
-              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors text-xs font-medium"
-            >
-              ← Home
-            </button>
-            <span className="text-zinc-300 dark:text-zinc-700 text-xs">/</span>
-            <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 truncate">
-              {route?.name ?? "Loading…"}
-            </span>
-          </div>
+      <div className="px-6 sm:px-10 py-7 border-b border-zinc-800/60 bg-gradient-to-b from-zinc-900/40 to-transparent">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 mb-5 text-xs">
+          <button
+            onClick={() => navigate("/")}
+            className="text-zinc-500 hover:text-champagne transition-colors font-medium tracking-wide"
+          >
+            ← Home
+          </button>
+          <span className="text-zinc-700">/</span>
+          <span className="text-zinc-400 truncate font-medium">{route?.name ?? "Loading…"}</span>
+        </div>
 
-          {route ? (
-            <>
-              {/* Origins → Destinations */}
-              <div className="flex items-start gap-3 flex-wrap mb-2.5">
-                <div className="min-w-0">
-                  <p className="text-2xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">From</p>
-                  <AirportList codes={route.origins} />
-                </div>
-                <span className="text-xl text-zinc-300 dark:text-zinc-600 mt-4 flex-shrink-0">→</span>
-                <div className="min-w-0">
-                  <p className="text-2xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-0.5">To</p>
-                  <AirportList codes={route.destinations} />
-                </div>
+        {route ? (
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            {/* Left: route headline */}
+            <div className="min-w-0 flex-1">
+              {/* Origin → Destination headline */}
+              <div className="flex items-baseline gap-x-4 gap-y-2 flex-wrap mb-3">
+                <h1 className="font-serif text-3xl sm:text-4xl text-zinc-100 tracking-tight leading-tight">
+                  <AirportHeadline codes={route.origins} />
+                  <span className="mx-3 text-champagne/60 text-2xl align-middle">→</span>
+                  <AirportHeadline codes={route.destinations} />
+                </h1>
               </div>
 
-              {/* Cabin badges + date range */}
-              <div className="flex items-center flex-wrap gap-1.5">
-                {route.cabin_classes.map((c) => (
-                  <span key={c} className={`text-2xs font-semibold px-2 py-0.5 rounded-full ${CABIN_COLOR[c] ?? "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
-                    {CABIN_LABEL[c] ?? c}
-                  </span>
-                ))}
-                {route.date_from && route.date_to && (
-                  <span className="text-2xs text-zinc-500 dark:text-zinc-400 ml-1">
-                    📅 {format(new Date(route.date_from + "T12:00:00"), "d MMM")} – {format(new Date(route.date_to + "T12:00:00"), "d MMM yyyy")}
-                  </span>
-                )}
-              </div>
-
-              {/* Scan status */}
-              <div className="mt-1.5">
-                {meta && !meta.error && meta.time && (
-                  <p className="text-2xs text-zinc-400 dark:text-zinc-500">
-                    Last scan {formatDistanceToNow(meta.time, { addSuffix: true })}
-                    {" · "}
-                    <span className={meta.scored > 0 ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
-                      {meta.scored ?? 0} deal{meta.scored !== 1 ? "s" : ""} scored
+              {/* Meta row: cabin badges · dates · scan status */}
+              <div className="flex items-center flex-wrap gap-x-3 gap-y-2 text-xs">
+                {/* Cabin chips */}
+                <div className="flex items-center gap-1.5">
+                  {route.cabin_classes.map((c) => (
+                    <span
+                      key={c}
+                      className={`font-medium px-2.5 py-1 rounded-full border ${CABIN_COLOR[c] ?? "bg-zinc-800/60 text-zinc-400 border-zinc-700"}`}
+                    >
+                      {CABIN_LABEL[c] ?? c}
                     </span>
-                  </p>
+                  ))}
+                </div>
+
+                {/* Dates */}
+                {route.date_from && route.date_to && (
+                  <>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-zinc-400 font-light tabular-nums">
+                      {format(new Date(route.date_from + "T12:00:00"), "d MMM")}
+                      {" – "}
+                      {format(new Date(route.date_to + "T12:00:00"), "d MMM yyyy")}
+                    </span>
+                  </>
+                )}
+
+                {/* Scan status */}
+                {meta && !meta.error && meta.time && (
+                  <>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-zinc-500 font-light">
+                      Last scan {formatDistanceToNow(meta.time, { addSuffix: true })}
+                      {meta.scored > 0 && (
+                        <span className="text-emerald-400 font-medium ml-1.5">
+                          · {meta.scored} deal{meta.scored !== 1 ? "s" : ""} scored
+                        </span>
+                      )}
+                    </span>
+                  </>
                 )}
                 {meta?.error && (
-                  <p className="text-2xs text-red-500 font-medium">⚠ Last scan failed</p>
+                  <>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-red-400 font-medium">⚠ Last scan failed</span>
+                  </>
+                )}
+
+                {/* Paused indicator */}
+                {route && !route.is_active && (
+                  <>
+                    <span className="text-zinc-700">·</span>
+                    <span className="text-amber-400 font-medium">⏸ Paused</span>
+                  </>
                 )}
               </div>
-            </>
-          ) : (
-            <div className="h-12 w-64 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse" />
-          )}
-        </div>
+            </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Cabin filter */}
-          {route?.cabin_classes.length > 1 && (
-            <select
-              value={cabinFilter ?? ""}
-              onChange={(e) => setCabinFilter(e.target.value || null)}
-              className="input py-1.5 text-xs"
-            >
-              <option value="">All cabins</option>
-              {route.cabin_classes.map((c) => (
-                <option key={c} value={c}>{CABIN_LABEL[c]}</option>
-              ))}
-            </select>
-          )}
+            {/* Right: actions */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Cabin filter */}
+              {route?.cabin_classes.length > 1 && (
+                <select
+                  value={cabinFilter ?? ""}
+                  onChange={(e) => setCabinFilter(e.target.value || null)}
+                  className="input py-2 px-3 text-xs min-w-[120px]"
+                >
+                  <option value="">All cabins</option>
+                  {route.cabin_classes.map((c) => (
+                    <option key={c} value={c}>{CABIN_LABEL[c]}</option>
+                  ))}
+                </select>
+              )}
 
-          <button
-            onClick={handleScan}
-            disabled={isScanning}
-            className="btn-primary text-xs py-1.5 px-3 disabled:opacity-50"
-          >
-            {isScanning ? (
-              <span className="flex items-center gap-1.5">
-                <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
-                </svg>
-                Scanning…
-              </span>
-            ) : "Scan Now"}
-          </button>
+              <button
+                onClick={handleScan}
+                disabled={isScanning}
+                className="btn-primary text-xs py-2 px-4 disabled:opacity-60 disabled:cursor-wait whitespace-nowrap"
+                title={isScanning ? "Scan in progress…" : "Run a fresh scan now"}
+              >
+                {isScanning ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
+                    </svg>
+                    Scanning…
+                  </span>
+                ) : "Scan Now"}
+              </button>
 
-          <button
-            onClick={handleToggleActive}
-            className="btn-ghost text-xs py-1.5 px-3"
-          >
-            {route?.is_active ? "Pause" : "Resume"}
-          </button>
+              <button
+                onClick={handleToggleActive}
+                className="btn-ghost text-xs py-2 px-3 whitespace-nowrap"
+                title={route?.is_active ? "Pause monitoring" : "Resume monitoring"}
+              >
+                {route?.is_active ? "Pause" : "Resume"}
+              </button>
 
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-xs text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors px-2"
-          >
-            Delete
-          </button>
-        </div>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-xs text-zinc-500 hover:text-red-400 transition-colors px-2 py-2"
+                title="Delete this route"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="h-10 w-96 bg-zinc-800/50 rounded-lg animate-pulse" />
+            <div className="h-4 w-64 bg-zinc-800/30 rounded animate-pulse" />
+          </div>
+        )}
       </div>
 
       {/* ── Two-column body ────────────────────────────────────────────── */}
