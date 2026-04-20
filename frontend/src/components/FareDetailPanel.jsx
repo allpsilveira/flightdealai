@@ -10,6 +10,7 @@ import loungeAccess from "../data/lounge_access.json";
 import allAirports from "../data/airports.json";
 import AirportComparisonMap from "./AirportComparisonMap";
 import FormattedText from "./FormattedText";
+import ScoreExplainer from "./ScoreExplainer";
 
 /* ===================================================================== */
 /*  Lookups & helpers                                                    */
@@ -500,6 +501,9 @@ export default function FareDetailPanel({ deal, onClose, routeOrigins = [], deal
                   </div>
 
                   <div className="p-7 space-y-7 bg-zinc-950/50">
+                    {/* Why this scored — plain English with technical toggle */}
+                    {deal?.id && <ScoreExplainer dealId={deal.id} compact />}
+
                     {/* Cabin product */}
                     {cabinInfo && (
                       <Section label="Cabin">

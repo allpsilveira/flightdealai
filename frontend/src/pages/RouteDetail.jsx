@@ -19,6 +19,7 @@ import IntelligencePanel from "../components/IntelligencePanel";
 import TripTypeComparison from "../components/TripTypeComparison";
 import AIInsightPanel from "../components/AIInsightPanel";
 import EventDetailDrawer from "../components/EventDetailDrawer";
+import ScoreExplainer from "../components/ScoreExplainer";
 import popularAirports from "../data/airports.json";
 
 const AIRPORT_MAP = Object.fromEntries(popularAirports.map((a) => [a.iata, a]));
@@ -537,6 +538,9 @@ export default function RouteDetail() {
           )}
 
           {/* AI insight */}
+          {/* Why this score */}
+          {bestDeal?.id && <ScoreExplainer dealId={bestDeal.id} />}
+
           <AIInsightPanel deal={bestDeal} language="en" />
 
           {/* Route stats */}

@@ -197,6 +197,54 @@ async def get_deal(
     return deal
 
 
+@router.get("/{deal_id}/explain")
+async def explain_deal_endpoint(
+    deal_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Plain-English breakdown of why a deal scored what it did.
+    Deterministic â€” no LLM call. Computed from the deal's sub-scores + context.
+    """
+    from fastapi import HTTPException
+    from app.services.score_explainer import explain_deal
+
+    result = await db.execute(select(DealAnalysis).where(DealAnalysis.id == deal_id))
+    deal = result.scalar_one_or_none()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    payload = {
+        "score_total":           deal.score_total,
+        "score_percentile":      deal.score_percentile,
+        "score_zscore":          deal.score_zscore,
+        "score_trend_alignment": deal.score_trend_alignment,
+        "score_trend_direction": deal.score_trend_direction,
+        "score_cross_source":    deal.score_cross_source,
+        "score_arbitrage":       deal.score_arbitrage,
+        "score_fare_brand":      deal.score_fare_brand,
+        "score_scarcity":        deal.score_scarcity,
+        "score_award":           deal.score_award,
+        "action":                deal.action,
+        "is_gem":                deal.is_gem,
+        "is_error_fare":         deal.is_error_fare,
+        "sources_confirmed":     deal.sources_confirmed or [],
+        "percentile_position":   deal.percentile_position,
+        "zscore":                deal.zscore,
+        "google_price_level":    deal.google_price_level,
+        "typical_price_low":     deal.typical_price_low,
+        "typical_price_high":    deal.typical_price_high,
+        "best_price_usd":        deal.best_price_usd,
+        "fare_brand_name":       deal.fare_brand_name,
+        "seats_remaining":       deal.seats_remaining,
+        "best_award_miles":      deal.best_award_miles,
+        "best_award_program":    deal.best_award_program,
+        "best_cpp":              deal.best_cpp,
+    }
+    return explain_deal(payload)
+
+
 @router.get("/offers/route/{route_id}", response_model=list[FlightOfferResponse])
 async def get_route_offers(
     route_id: uuid.UUID,
@@ -402,7 +450,7 @@ async def trip_comparison(
         if one_way_out and one_way_in else None
     )
 
-    # Round-trip not yet stored separately — placeholder until RT scanner ships
+    # Round-trip not yet stored separately ï¿½ placeholder until RT scanner ships
     round_trip_total = None
 
     if one_way_total and round_trip_total:
