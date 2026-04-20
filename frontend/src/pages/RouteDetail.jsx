@@ -125,6 +125,9 @@ export default function RouteDetail() {
       params: { origin, destination: dest, cabin_class: cabin, days: historyDays },
     })
       .then((r) => setPriceHistory(r.data))
+      .catch(() => setPriceHistory([]))
+      .finally(() => setHistoryLoading(false));
+  }, [id, route, historyDays, cabinFilter]);
 
   // Load route events (for timeline overlay on chart + EventTimeline component)
   useEffect(() => {
@@ -142,9 +145,6 @@ export default function RouteDetail() {
       .then((r) => setForecast(r.data))
       .catch(() => setForecast(null));
   }, [id, route, cabinFilter]);
-      .catch(() => setPriceHistory([]))
-      .finally(() => setHistoryLoading(false));
-  }, [id, route, historyDays, cabinFilter]);
 
   const handleScan = async () => {
     await scanRoute(id);
