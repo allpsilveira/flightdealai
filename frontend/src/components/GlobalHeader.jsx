@@ -47,6 +47,19 @@ export default function GlobalHeader() {
           Home
         </NavLink>
         <NavLink
+          to="/saved"
+          className={({ isActive }) =>
+            clsx(
+              "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+              isActive
+                ? "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            )
+          }
+        >
+          Saved
+        </NavLink>
+        <NavLink
           to="/settings"
           className={({ isActive }) =>
             clsx(

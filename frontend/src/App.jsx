@@ -10,6 +10,8 @@ const Login = lazy(() => import("./pages/Login"));
 const Home = lazy(() => import("./pages/Home"));
 const RouteDetail = lazy(() => import("./pages/RouteDetail"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Saved = lazy(() => import("./pages/Saved"));
+const ShareView = lazy(() => import("./pages/ShareView"));
 
 function LoadingFallback() {
   return (
@@ -36,6 +38,7 @@ export default function App() {
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/share/:token" element={<ErrorBoundary><ShareView /></ErrorBoundary>} />
             <Route
               path="/"
               element={
@@ -46,6 +49,7 @@ export default function App() {
             >
               <Route index element={<ErrorBoundary><Home /></ErrorBoundary>} />
               <Route path="route/:id" element={<ErrorBoundary><RouteDetail /></ErrorBoundary>} />
+              <Route path="saved" element={<ErrorBoundary><Saved /></ErrorBoundary>} />
               <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             </Route>
           </Routes>

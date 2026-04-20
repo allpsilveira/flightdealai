@@ -230,10 +230,24 @@ export default function EventDetailDrawer({ eventId, onClose, onOpenFare }) {
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2000);
     } catch (e) {
-      // Fail silently — endpoint may not exist yet
       console.warn("save failed", e?.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [sharedOk, setSharedOk] = useState(false);
+  const handleShare = async () => {
+    try {
+      const res = await api.post("/share", { item_type: "event", item_id: String(eventId), ttl_hours: 168 });
+      const url = res.data?.url;
+      if (url && navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        setSharedOk(true);
+        setTimeout(() => setSharedOk(false), 2000);
+      }
+    } catch (e) {
+      console.warn("share failed", e?.message);
     }
   };
 
@@ -410,10 +424,19 @@ export default function EventDetailDrawer({ eventId, onClose, onOpenFare }) {
               {exporting ? "…" : "Export PNG"}
             </button>
             <button
-              onClick={handleWhatsApp}
+              onClick={handleShare}
               className="flex-1 px-3 py-2 rounded-lg border border-zinc-800
-                         text-xs text-zinc-300 hover:text-emerald-400
+                         text-xs text-zinc-300 hover:text-champagne
+                         hover:border-champagne/40 transition-colors"
+            >
+              {sharedOk ? "✓ Link copied" : "Share link"}
+            </button>
+            <button
+              onClick={handleWhatsApp}
+              className="px-3 py-2 rounded-lg border border-zinc-800
+                         text-xs text-zinc-500 hover:text-emerald-400
                          hover:border-emerald-500/40 transition-colors"
+              title="Send to WhatsApp"
             >
               WhatsApp
             </button>

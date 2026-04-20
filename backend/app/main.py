@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.config import get_settings
 from app.api import (
     auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks,
-    events, intelligence,
+    events, intelligence, saved,
 )
 
 logger = structlog.get_logger()
@@ -103,6 +103,8 @@ app.include_router(scan.router,     prefix="/api/scan",     tags=["scan"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(events.router,   prefix="/api/events",   tags=["events"])
 app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
+app.include_router(saved.router,    prefix="/api/saved",    tags=["saved"])
+app.include_router(saved.share_router, prefix="/api/share", tags=["share"])
 
 
 @app.get("/api/health", tags=["health"])

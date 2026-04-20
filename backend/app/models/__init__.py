@@ -15,6 +15,7 @@ from app.models.intelligence import (
     ScoringWeights,
     DealOutcome,
 )
+from app.models.saved import SavedItem, ShareLink
 
 __all__ = [
     "User",

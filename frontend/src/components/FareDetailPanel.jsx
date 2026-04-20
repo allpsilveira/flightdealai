@@ -228,6 +228,9 @@ export default function FareDetailPanel({ deal, onClose, routeOrigins = [], deal
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [loadingEnrich, setLoadingEnrich] = useState(true);
   const [activeTab,     setActiveTab]     = useState("fare"); // 'fare' | 'verify' | 'nearby'
+  const [saving,        setSaving]        = useState(false);
+  const [savedOk,       setSavedOk]       = useState(false);
+  const [sharedOk,      setSharedOk]      = useState(false);
 
   /* Close on Escape */
   useEffect(() => {
@@ -264,6 +267,27 @@ export default function FareDetailPanel({ deal, onClose, routeOrigins = [], deal
   }, [deal?.id]);
 
   if (!deal) return null;
+
+  const handleSave = async () => {
+    if (!deal?.id) return;
+    setSaving(true);
+    try {
+      await api.post("/saved", { item_type: "deal", item_id: String(deal.id) });
+      setSavedOk(true); setTimeout(() => setSavedOk(false), 2000);
+    } catch (e) { console.warn("save failed", e?.message); }
+    finally { setSaving(false); }
+  };
+
+  const handleShare = async () => {
+    if (!deal?.id) return;
+    try {
+      const r = await api.post("/share", { item_type: "deal", item_id: String(deal.id), ttl_hours: 168 });
+      if (r.data?.url && navigator.clipboard) {
+        await navigator.clipboard.writeText(r.data.url);
+        setSharedOk(true); setTimeout(() => setSharedOk(false), 2000);
+      }
+    } catch (e) { console.warn("share failed", e?.message); }
+  };
 
   /* Derived data */
   const originAp = airportMap[deal.origin];
@@ -335,16 +359,37 @@ export default function FareDetailPanel({ deal, onClose, routeOrigins = [], deal
             {/* ── Header ─────────────────────────────────────────── */}
             <div className="relative px-7 pt-6 pb-6 bg-gradient-to-b from-zinc-900/80 to-zinc-950
                             border-b border-zinc-800">
-              {/* Close */}
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center
-                           rounded-full bg-zinc-800/60 text-zinc-400 hover:text-zinc-100
-                           hover:bg-zinc-700 transition-colors text-sm"
-              >
-                ✕
-              </button>
+              {/* Action cluster: Save · Share · Close */}
+              <div className="absolute top-5 right-5 flex items-center gap-1.5">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-2.5 h-8 flex items-center justify-center rounded-full
+                             bg-zinc-800/60 text-zinc-400 hover:text-champagne hover:bg-zinc-700
+                             transition-colors text-2xs font-medium disabled:opacity-50"
+                  title="Save this fare"
+                >
+                  {savedOk ? "✓ Saved" : saving ? "…" : "★ Save"}
+                </button>
+                <button
+                  onClick={handleShare}
+                  className="px-2.5 h-8 flex items-center justify-center rounded-full
+                             bg-zinc-800/60 text-zinc-400 hover:text-champagne hover:bg-zinc-700
+                             transition-colors text-2xs font-medium"
+                  title="Copy share link"
+                >
+                  {sharedOk ? "✓ Copied" : "Share"}
+                </button>
+                <button
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="w-8 h-8 flex items-center justify-center
+                             rounded-full bg-zinc-800/60 text-zinc-400 hover:text-zinc-100
+                             hover:bg-zinc-700 transition-colors text-sm"
+                >
+                  ✕
+                </button>
+              </div>
 
               {/* Airline + cabin + verification badge */}
               <div className="flex items-center gap-3 mb-5 pr-12">
