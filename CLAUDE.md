@@ -174,6 +174,18 @@ TOTAL: ~$37/month all-in (SerpApi $25 + Seats.aero $10 + Duffel ~$2.25)
 - GEM flag → always alert regardless of score
 - z-score >2.5 → flag as POSSIBLE ERROR FARE → always alert
 
+### ML Augmentation (Phase 4 — best-effort)
+The hand-rolled scorer above is **always** the source of truth for `score_total`. ML adds richer
+signals on top, surfaced through `/deals/{id}/explain` and the ScoreExplainer UI:
+
+- **Forecaster** — statsforecast AutoARIMA per (route, cabin), 14-day horizon → "buy now vs wait"
+- **Anomaly** — IsolationForest per (route, cabin) on price/dow/days_out/month → confirms error fares
+- **Expected price** — global LightGBM regressor + SHAP top-3 → "X% below trained expectation"
+
+Models live in `ml_models/` (joblib), retrained weekly Sun 03:00 UTC by `dags/ml_retrain_dag.py`.
+All loaders return None gracefully when artifacts are missing — system runs identically without them.
+ML signals never block scoring; they only enrich the explainer drivers.
+
 ---
 
 ## Apache Airflow DAG Architecture

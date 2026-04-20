@@ -22,7 +22,7 @@ class DealAnalysis(Base):
     departure_date: Mapped[date] = mapped_column(Date, nullable=False)
     cabin_class: Mapped[str] = mapped_column(String(20), nullable=False)
     best_price_usd: Mapped[float] = mapped_column(Float, nullable=False)
-    best_source: Mapped[str] = mapped_column(String(20), nullable=False)  # amadeus|google|kiwi
+    best_source: Mapped[str] = mapped_column(String(20), nullable=False)  # google|duffel (amadeus/kiwi historical)
     airline_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     # ── Score breakdown ────────────────────────────────────────────────────────

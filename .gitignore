@@ -37,6 +37,9 @@ venv/
 dist/
 build/
 
+# ML model artifacts (regenerated weekly by ml_retrain DAG)
+ml_models/
+
 # Node
 frontend/node_modules/
 frontend/dist/
