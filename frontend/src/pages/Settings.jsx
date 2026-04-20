@@ -275,7 +275,14 @@ function ApiUsageSection() {
       .then((r) => { if (!cancelled) setData(r.data); })
       .catch((e) => {
         if (!cancelled) {
-          const msg = e.response?.data?.detail ?? e.message ?? "Failed to load usage.";
+          // FastAPI 422s return `detail` as an array of {loc,msg,...}; coerce to string
+          // so React doesn't blow up trying to render an object.
+          const raw = e.response?.data?.detail;
+          let msg;
+          if (typeof raw === "string") msg = raw;
+          else if (Array.isArray(raw))  msg = raw.map((x) => x?.msg ?? JSON.stringify(x)).join(", ");
+          else if (raw && typeof raw === "object") msg = JSON.stringify(raw);
+          else msg = e.message ?? "Failed to load usage.";
           setError(msg);
         }
       })
