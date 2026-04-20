@@ -4,6 +4,7 @@ import unicodedata
 from fastapi import APIRouter, Depends
 from app.core.deps import get_current_user
 from app.models.user import User
+from app.services.serpapi_client import autocomplete_airports
 
 router = APIRouter()
 
@@ -61,4 +62,16 @@ async def search_airports(q: str, user: User = Depends(get_current_user)):
             matches.append(a)
         if len(matches) >= 50:
             break
+
+    # Phase 6.5.5: Hybrid — if we have few/no local matches AND query is 4+ chars,
+    # fall back to SerpApi autocomplete to cover obscure airports/cities.
+    if len(matches) < 3 and len(q.strip()) >= 4:
+        remote = await autocomplete_airports(q.strip(), limit=10)
+        # Merge, dedupe by IATA, prefer local matches first
+        seen = {m.get("iata", "").upper() for m in matches}
+        for r in remote:
+            if r["iata"] not in seen:
+                matches.append(r)
+                seen.add(r["iata"])
+
     return matches[:20]

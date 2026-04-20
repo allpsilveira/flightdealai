@@ -27,12 +27,32 @@ from sqlalchemy.dialects.postgresql import insert
 from app.models.deal import DealAnalysis
 from app.services.cross_reference import cross_reference
 from app.services.stats import get_daily_stats, get_price_slope_7d
-from app.services.scoring import score_deal
+from app.services.scoring import score_deal, apply_learned_weights
 from app.services.award_analyzer import enrich_awards, best_award_summary
 from app.services import duffel_client, seats_aero_client
 from app.services.ingestion import store_duffel_price, store_award_prices, store_flight_offers
 from app.services import claude_advisor
 from app.services.event_generator import generate_events
+from app.services.weight_learner import get_active_weights
+
+# Module-level cache for ML-learned weights — refreshed every CACHE_TTL seconds.
+# Avoids querying scoring_weights table on every single scan.
+_WEIGHTS_CACHE: dict[str, float] = {}
+_WEIGHTS_CACHE_AT: float = 0.0
+_WEIGHTS_CACHE_TTL_SEC = 300  # 5 minutes
+
+
+async def _get_weights_cached(db: AsyncSession) -> dict[str, float]:
+    global _WEIGHTS_CACHE, _WEIGHTS_CACHE_AT
+    import time
+    now = time.time()
+    if now - _WEIGHTS_CACHE_AT > _WEIGHTS_CACHE_TTL_SEC:
+        try:
+            _WEIGHTS_CACHE = await get_active_weights(db)
+            _WEIGHTS_CACHE_AT = now
+        except Exception as exc:
+            logger.warning("weights_cache_refresh_failed", error=str(exc))
+    return _WEIGHTS_CACHE
 from app.services.intelligence import run_intelligence
 from app.api.ws import push_deal_update, push_new_events
 from app.models.route import Route
@@ -128,6 +148,11 @@ async def run_pipeline(
         award_results=enriched_awards or None,
         extra={"price_slope_7d": slope},
     )
+
+    # ── Step 5b: Apply ML-learned weights if available (Phase 6.5.3) ──────────
+    learned = await _get_weights_cached(db)
+    if learned:
+        final_score = apply_learned_weights(final_score, learned)
 
     # ── Step 6: AI recommendation (BUY/STRONG_BUY/GEM only) ──────────────────
     deal_context = {**final_score, **xref,

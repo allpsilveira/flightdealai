@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRoutesStore } from "../stores/useRoutes";
 import RouteCard from "../components/RouteCard";
 import AddRouteModal from "../components/AddRouteModal";
@@ -10,25 +10,65 @@ const CABIN_FILTERS = [
   { value: "PREMIUM_ECONOMY",label: "Premium Eco" },
 ];
 
+const SORT_OPTIONS = [
+  { value: "score",     label: "Score (high → low)" },
+  { value: "updated",   label: "Recently updated" },
+  { value: "drop",      label: "Biggest drop" },
+  { value: "name",      label: "Name (A → Z)" },
+];
+
 export default function Home() {
-  const { routes, loading, error, bestDeals, scanning, fetchRoutes, scanRoute } =
+  const { routes, loading, error, bestDeals, scanning, scanMeta, fetchRoutes, scanRoute } =
     useRoutesStore();
   const [showModal,  setShowModal]  = useState(false);
   const [cabinFilter, setCabinFilter] = useState(null);
+  const [search,      setSearch]      = useState("");
+  const [sortBy,      setSortBy]      = useState("score");
 
   useEffect(() => { fetchRoutes(); }, []);
 
-  const filtered = cabinFilter
-    ? routes.filter((r) => r.cabin_classes.includes(cabinFilter))
-    : routes;
+  const filtered = useMemo(() => {
+    let list = routes;
+    if (cabinFilter) list = list.filter((r) => r.cabin_classes.includes(cabinFilter));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((r) => {
+        const o = (r.origins      ?? []).join(" ").toLowerCase();
+        const d = (r.destinations ?? []).join(" ").toLowerCase();
+        const n = (r.name ?? "").toLowerCase();
+        return o.includes(q) || d.includes(q) || n.includes(q);
+      });
+    }
+    return list;
+  }, [routes, cabinFilter, search]);
 
-  // Sort: active first, then by best deal score desc
-  const sorted = [...filtered].sort((a, b) => {
-    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-    const aScore = bestDeals[a.id]?.score_total ?? 0;
-    const bScore = bestDeals[b.id]?.score_total ?? 0;
-    return bScore - aScore;
-  });
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    switch (sortBy) {
+      case "updated":
+        return list.sort((a, b) => {
+          const at = scanMeta[a.id]?.time ? new Date(scanMeta[a.id].time).getTime() : 0;
+          const bt = scanMeta[b.id]?.time ? new Date(scanMeta[b.id].time).getTime() : 0;
+          return bt - at;
+        });
+      case "drop":
+        return list.sort((a, b) => {
+          const ad = bestDeals[a.id]?.percentile_position ?? 100;
+          const bd = bestDeals[b.id]?.percentile_position ?? 100;
+          return ad - bd; // lower percentile = bigger drop
+        });
+      case "name":
+        return list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+      case "score":
+      default:
+        return list.sort((a, b) => {
+          if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+          const aScore = bestDeals[a.id]?.score_total ?? 0;
+          const bScore = bestDeals[b.id]?.score_total ?? 0;
+          return bScore - aScore;
+        });
+    }
+  }, [filtered, sortBy, bestDeals, scanMeta]);
 
   return (
     <div className="p-6 sm:p-8 max-w-5xl mx-auto">
@@ -52,22 +92,42 @@ export default function Home() {
         </button>
       </div>
 
-      {/* ── Cabin filter pills ──────────────────────────────────────────── */}
+      {/* ── Cabin filter pills + search + sort ──────────────────────────── */}
       {routes.length > 0 && (
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
-          {CABIN_FILTERS.map(({ value, label }) => (
-            <button
-              key={label}
-              onClick={() => setCabinFilter(value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                cabinFilter === value
-                  ? "bg-brand-500 text-white border-brand-500"
-                  : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-brand-300 dark:hover:border-brand-600"
-              }`}
+        <div className="flex flex-col gap-3 mb-5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {CABIN_FILTERS.map(({ value, label }) => (
+              <button
+                key={label}
+                onClick={() => setCabinFilter(value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                  cabinFilter === value
+                    ? "bg-brand-500 text-white border-brand-500"
+                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-brand-300 dark:hover:border-brand-600"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by airport, city, or route name…"
+              className="input flex-1 min-w-[200px] text-xs py-1.5"
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="input text-xs py-1.5 w-auto"
             >
-              {label}
-            </button>
-          ))}
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

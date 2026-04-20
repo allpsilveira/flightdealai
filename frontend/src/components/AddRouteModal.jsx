@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRoutesStore } from "../stores/useRoutes";
 import api from "../lib/api";
 import popularAirports from "../data/airports.json";
+import RouteCostEstimate from "./RouteCostEstimate";
 
 const POPULAR_MAP = Object.fromEntries(popularAirports.map((a) => [a.iata, a]));
 
@@ -345,6 +346,14 @@ export default function AddRouteModal({ onClose }) {
                   </p>
                 ) : null)}
               </div>
+
+              {/* Cost estimate (Phase 8.17) */}
+              <RouteCostEstimate
+                origins={form.origins}
+                destinations={form.destinations}
+                cabinClasses={form.cabin_classes}
+                dateCount={1}
+              />
             </div>
           )}
 

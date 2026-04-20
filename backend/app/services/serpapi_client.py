@@ -249,3 +249,75 @@ async def get_cheapest_dates(
         [r for r in results if r],
         key=lambda x: x["price_usd"],
     )
+
+
+# ── Airport autocomplete (Phase 6.5.5) ────────────────────────────────────────
+
+# In-process cache: {query_lower: (timestamp, results)}
+# Avoids hammering SerpApi for repeated queries during a session.
+_AUTOCOMPLETE_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_AUTOCOMPLETE_TTL_SEC = 86400  # 24h
+
+
+async def autocomplete_airports(query: str, limit: int = 10) -> list[dict[str, Any]]:
+    """
+    Look up airports/cities via Google Flights autocomplete.
+    Used as a fallback when local airports.json doesn't match.
+
+    Returns list of {iata, name, city, country} dicts (best-effort field mapping).
+    Returns [] on failure or if no API key.
+    """
+    if not settings.serpapi_api_key or not query or len(query) < 2:
+        return []
+
+    import time
+    q = query.strip().lower()
+    now = time.time()
+    cached = _AUTOCOMPLETE_CACHE.get(q)
+    if cached and now - cached[0] < _AUTOCOMPLETE_TTL_SEC:
+        return cached[1][:limit]
+
+    params = {
+        "engine":  "google_flights_autocomplete",
+        "api_key": settings.serpapi_api_key,
+        "q":       query,
+        "hl":      "en",
+    }
+    try:
+        async with _SEMAPHORE:
+            async with track_api_call("serpapi", endpoint="autocomplete") as _t:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=3.0)) as client:
+                    resp = await client.get(BASE_URL, params=params)
+                    _t.set_status(resp.status_code)
+                    if resp.status_code != 200:
+                        logger.warning("serpapi_autocomplete_http", status=resp.status_code, q=query)
+                        return []
+                    data = resp.json()
+    except Exception as exc:
+        logger.warning("serpapi_autocomplete_error", error=str(exc), q=query)
+        return []
+
+    # SerpApi returns "airports" or "places" depending on response shape
+    raw = data.get("airports") or data.get("places") or []
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        # Best-effort field mapping — SerpApi schema varies
+        iata = item.get("iata") or item.get("code") or item.get("id")
+        if not iata or len(iata) != 3:
+            continue
+        out.append({
+            "iata":    iata.upper(),
+            "name":    item.get("name") or item.get("airport_name") or "",
+            "city":    item.get("city") or item.get("address", {}).get("city") if isinstance(item.get("address"), dict) else item.get("city", ""),
+            "country": item.get("country") or item.get("country_name") or "",
+        })
+
+    _AUTOCOMPLETE_CACHE[q] = (now, out)
+    # Light cleanup: drop cache entries older than TTL when cache > 500 entries
+    if len(_AUTOCOMPLETE_CACHE) > 500:
+        cutoff = now - _AUTOCOMPLETE_TTL_SEC
+        for k in list(_AUTOCOMPLETE_CACHE.keys()):
+            if _AUTOCOMPLETE_CACHE[k][0] < cutoff:
+                del _AUTOCOMPLETE_CACHE[k]
+
+    return out[:limit]

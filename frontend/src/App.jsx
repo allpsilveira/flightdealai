@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "./stores/useAuth";
 import { useDealsWebSocket } from "./hooks/useDealsWebSocket";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Lazy-loaded pages — each becomes a separate chunk (reduces initial bundle ~60%)
 const Login = lazy(() => import("./pages/Login"));
@@ -31,23 +32,25 @@ function RequireAuth({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<LoadingFallback />}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <RequireAuth>
-                <Layout />
-              </RequireAuth>
-            }
-          >
-            <Route index element={<Home />} />
-            <Route path="route/:id" element={<RouteDetail />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/"
+              element={
+                <RequireAuth>
+                  <Layout />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<ErrorBoundary><Home /></ErrorBoundary>} />
+              <Route path="route/:id" element={<ErrorBoundary><RouteDetail /></ErrorBoundary>} />
+              <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

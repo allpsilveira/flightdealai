@@ -263,3 +263,57 @@ def _empty_score() -> dict:
     ]} | {"action": "SKIP", "is_gem": False, "is_error_fare": False,
            "percentile_position": None, "zscore": None, "google_price_level": None,
            "seats_remaining": None, "fare_brand_name": None}
+
+
+# ── Adaptive scoring (Phase 6.5.3) ────────────────────────────────────────────
+
+# Sub-score columns the weight-learner trains on. Must match
+# weight_learner.FEATURE_COLUMNS exactly.
+SUB_SCORE_KEYS = [
+    "score_percentile",
+    "score_zscore",
+    "score_trend_alignment",
+    "score_trend_direction",
+    "score_cross_source",
+    "score_arbitrage",
+    "score_fare_brand",
+    "score_scarcity",
+    "score_award",
+]
+
+
+def apply_learned_weights(
+    score_dict: dict,
+    learned_weights: dict[str, float] | None,
+) -> dict:
+    """
+    Re-weight an already-computed score dict using ML-learned per-sub-score weights.
+
+    Returns a new dict with two extra keys:
+      - score_total_manual: the original equal-weighted score (kept for A/B)
+      - score_total: replaced with the learned-weight version IF weights provided
+
+    If learned_weights is empty/None, the dict is returned unchanged.
+    Action label is recomputed from the new score_total.
+
+    Idempotent — if score_total_manual already exists, we don't double-shift.
+    """
+    if not learned_weights:
+        return score_dict
+
+    out = dict(score_dict)
+    if "score_total_manual" not in out:
+        out["score_total_manual"] = out.get("score_total", 0.0)
+
+    # Recompute raw sum with weights (default weight 1.0 if missing)
+    raw_weighted = 0.0
+    for key in SUB_SCORE_KEYS:
+        sub = float(out.get(key) or 0.0)
+        weight = float(learned_weights.get(key, 1.0))
+        raw_weighted += sub * weight
+
+    # Same normalization as score_deal: raw / 17.0, capped at 10.0
+    new_total = round(min(raw_weighted / 17.0, 10.0), 1)
+    out["score_total"]    = new_total
+    out["action"]         = _action(new_total, out.get("is_gem", False))
+    return out
