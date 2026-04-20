@@ -1,10 +1,11 @@
 import { formatDistanceToNow } from "date-fns";
+import FormattedText from "./FormattedText";
 
 const SEVERITY_DOT = {
   critical: "bg-red-500",
   high:     "bg-emerald-500",
   medium:   "bg-amber-400",
-  low:      "bg-blue-400",
+  low:      "bg-champagne",
   info:     "bg-zinc-400 dark:bg-zinc-600",
 };
 
@@ -12,9 +13,12 @@ const SEVERITY_LABEL = {
   critical: "text-red-600 dark:text-red-400",
   high:     "text-emerald-600 dark:text-emerald-400",
   medium:   "text-amber-600 dark:text-amber-400",
-  low:      "text-blue-600 dark:text-blue-400",
+  low:      "text-champagne",
   info:     "text-zinc-500 dark:text-zinc-400",
 };
+
+// Event types that get a champagne accent regardless of severity (luxury highlight).
+const CHAMPAGNE_TYPES = new Set(["ai_insight", "award_opened", "new_low", "error_fare"]);
 
 const EVENT_TYPE_LABEL = {
   price_drop:       "Price Drop",
@@ -33,8 +37,13 @@ const EVENT_TYPE_LABEL = {
 };
 
 export default function TimelineEvent({ event, onClick, isLast }) {
-  const dotCls = SEVERITY_DOT[event.severity] ?? SEVERITY_DOT.info;
-  const labelCls = SEVERITY_LABEL[event.severity] ?? SEVERITY_LABEL.info;
+  const useChampagne = CHAMPAGNE_TYPES.has(event.event_type);
+  const dotCls = useChampagne
+    ? "bg-champagne"
+    : (SEVERITY_DOT[event.severity] ?? SEVERITY_DOT.info);
+  const labelCls = useChampagne
+    ? "text-champagne"
+    : (SEVERITY_LABEL[event.severity] ?? SEVERITY_LABEL.info);
 
   return (
     <div
@@ -64,9 +73,12 @@ export default function TimelineEvent({ event, onClick, isLast }) {
           {event.headline}
         </p>
         {event.detail && (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
-            {event.detail}
-          </p>
+          <div className="mt-1">
+            <FormattedText
+              text={event.detail}
+              className="[&_p]:text-xs [&_p]:leading-relaxed [&_p]:text-zinc-500 [&_p]:dark:text-zinc-400 [&_li]:text-xs"
+            />
+          </div>
         )}
         {event.subtext && (
           <p className="text-2xs text-zinc-400 dark:text-zinc-500 mt-0.5">{event.subtext}</p>
