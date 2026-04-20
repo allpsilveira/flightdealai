@@ -18,6 +18,7 @@ import EventTimeline from "../components/EventTimeline";
 import IntelligencePanel from "../components/IntelligencePanel";
 import TripTypeComparison from "../components/TripTypeComparison";
 import AIInsightPanel from "../components/AIInsightPanel";
+import EventDetailDrawer from "../components/EventDetailDrawer";
 import popularAirports from "../data/airports.json";
 
 const AIRPORT_MAP = Object.fromEntries(popularAirports.map((a) => [a.iata, a]));
@@ -98,6 +99,7 @@ export default function RouteDetail() {
   const [historyDays,    setHistoryDays]     = useState(30);
   const [historyLoading, setHistoryLoading]  = useState(false);
   const [selectedDeal,   setSelectedDeal]    = useState(null);
+  const [selectedEventId, setSelectedEventId] = useState(null);
   const [cabinFilter,    setCabinFilter]     = useState(null);
   const [deleting,       setDeleting]        = useState(false);
   const [timelineKey,    setTimelineKey]     = useState(0);
@@ -429,10 +431,7 @@ export default function RouteDetail() {
                   routeId={id}
                   refreshKey={timelineKey}
                   onEventClick={(event) => {
-                    if (event.deal_analysis_id) {
-                      const match = deals.find((d) => d.id === event.deal_analysis_id);
-                      if (match) setSelectedDeal(match);
-                    }
+                    if (event?.id) setSelectedEventId(event.id);
                   }}
                 />
               ) : (
@@ -440,10 +439,7 @@ export default function RouteDetail() {
                   routeId={id}
                   refreshKey={timelineKey}
                   onEventClick={(event) => {
-                    if (event.deal_analysis_id) {
-                      const match = deals.find((d) => d.id === event.deal_analysis_id);
-                      if (match) setSelectedDeal(match);
-                    }
+                    if (event?.id) setSelectedEventId(event.id);
                   }}
                 />
               )}
@@ -544,6 +540,21 @@ export default function RouteDetail() {
           onClose={() => setSelectedDeal(null)}
           routeOrigins={route?.origins ?? []}
           dealsByOrigin={dealsByOrigin}
+        />
+      )}
+
+      {/* ── Event Detail Drawer (left slide-in) ───────────────────────── */}
+      {selectedEventId && (
+        <EventDetailDrawer
+          eventId={selectedEventId}
+          onClose={() => setSelectedEventId(null)}
+          onOpenFare={(dealId) => {
+            const match = deals.find((d) => d.id === dealId);
+            if (match) {
+              setSelectedDeal(match);
+              setSelectedEventId(null);
+            }
+          }}
         />
       )}
     </div>

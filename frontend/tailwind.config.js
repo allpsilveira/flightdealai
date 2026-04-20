@@ -26,6 +26,22 @@ export default {
           300: "#e0d4c0",
           400: "#c9b99a",
         },
+        // ── Champagne / gold — luxury accent ────────────────────────────────
+        // Used pervasively as the brand-replacement accent. MUST be registered
+        // here so tailwind compiles `text-champagne`, `bg-champagne/15`, etc.
+        champagne: {
+          DEFAULT: "#d4b483",
+          50:  "#fbf6ec",
+          100: "#f5ead2",
+          200: "#ebd5a4",
+          300: "#dfbe75",
+          400: "#d4b483",
+          500: "#c9a55f",
+          600: "#a8854c",
+          700: "#7e6238",
+          800: "#544127",
+          900: "#2c2113",
+        },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
@@ -40,10 +56,11 @@ export default {
         "brand":      "0 4px 14px rgba(242,100,25,0.35)",
       },
       animation: {
-        "fade-in":    "fadeIn 0.3s ease-out",
-        "slide-up":   "slideUp 0.25s ease-out",
-        "slide-right":"slideRight 0.3s ease-out",
-        "pulse-brand":"pulseBrand 2s ease-in-out infinite",
+        "fade-in":       "fadeIn 0.3s ease-out",
+        "slide-up":      "slideUp 0.25s ease-out",
+        "slide-right":   "slideRight 0.3s ease-out",
+        "slide-in-left": "slideInLeft 0.3s ease-out",
+        "pulse-brand":   "pulseBrand 2s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -56,6 +73,10 @@ export default {
         },
         slideRight: {
           "0%":   { opacity: "0", transform: "translateX(100%)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        slideInLeft: {
+          "0%":   { opacity: "0", transform: "translateX(-100%)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
         pulseBrand: {
