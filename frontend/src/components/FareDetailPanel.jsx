@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import {
-  ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
 } from "recharts";
 import api from "../lib/api";
 import cabinQuality from "../data/cabin_quality.json";
@@ -169,83 +168,7 @@ function PricePositionBar({ price, low, high, allTimeLow }) {
 }
 
 /* ===================================================================== */
-/*  Visualization #2 — Score radar                                       */
-/* ===================================================================== */
-
-function ScoreRadar({ deal }) {
-  // Normalize each sub-score to 0–100 for the radar
-  const data = [
-    { axis: "Percentile",   value: ((deal.score_percentile        ?? 0) / 30) * 100, raw: deal.score_percentile },
-    { axis: "Z-score",      value: ((deal.score_zscore            ?? 0) / 20) * 100, raw: deal.score_zscore },
-    { axis: "Trend align",  value: ((deal.score_trend_alignment   ?? 0) / 15) * 100, raw: deal.score_trend_alignment },
-    { axis: "Trend dir",    value: ((deal.score_trend_direction   ?? 0) / 10) * 100, raw: deal.score_trend_direction },
-    { axis: "Cross-source", value: ((deal.score_cross_source      ?? 0) / 20) * 100, raw: deal.score_cross_source },
-    { axis: "Arbitrage",    value: ((deal.score_arbitrage         ?? 0) / 10) * 100, raw: deal.score_arbitrage },
-    { axis: "Fare brand",   value: ((deal.score_fare_brand        ?? 0) / 10) * 100, raw: deal.score_fare_brand },
-    { axis: "Scarcity",     value: ((deal.score_scarcity          ?? 0) / 5)  * 100, raw: deal.score_scarcity },
-    { axis: "Award",        value: ((deal.score_award             ?? 0) / 50) * 100, raw: deal.score_award },
-  ];
-
-  return (
-    <ResponsiveContainer width="100%" height={240}>
-      <RadarChart data={data} outerRadius="78%">
-        <PolarGrid stroke="#3f3f46" strokeOpacity={0.5} />
-        <PolarAngleAxis
-          dataKey="axis"
-          tick={{ fill: "#a1a1aa", fontSize: 10, fontFamily: "inherit" }}
-        />
-        <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-        <Radar
-          dataKey="value"
-          stroke="#d4af7a"
-          fill="#d4af7a"
-          fillOpacity={0.25}
-          strokeWidth={1.5}
-        />
-      </RadarChart>
-    </ResponsiveContainer>
-  );
-}
-
-/* ===================================================================== */
-/*  Visualization #3 — Score donut                                       */
-/* ===================================================================== */
-
-function ScoreDonut({ score, max = 170 }) {
-  const pct = Math.min(100, (score / max) * 100);
-  const displayScore = Math.round((score / max) * 100);
-  const r = 36;
-  const c = 2 * Math.PI * r;
-  const offset = c * (1 - pct / 100);
-  const color =
-    displayScore >= 60 ? "#d4af7a"  // champagne
-    : displayScore >= 40 ? "#84cc16" // lime
-    : displayScore >= 20 ? "#f59e0b" // amber
-    : "#52525b";                     // zinc — too thin to score
-
-  return (
-    <div className="relative w-24 h-24 flex-shrink-0">
-      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-        <circle cx="50" cy="50" r={r} stroke="#27272a" strokeWidth="8" fill="none" />
-        <circle
-          cx="50" cy="50" r={r}
-          stroke={color} strokeWidth="8" fill="none"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 600ms ease" }}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-serif text-2xl text-champagne tabular-nums leading-none">{displayScore}</span>
-        <span className="text-2xs text-zinc-500 mt-0.5">/ 100</span>
-      </div>
-    </div>
-  );
-}
-
-/* ===================================================================== */
-/*  Visualization #4 — Mini sparkline of recent prices                   */
+/*  Visualization #2 — Mini sparkline of recent prices                   */
 /* ===================================================================== */
 
 function PriceSparkline({ data, currentPrice, allTimeLow }) {
@@ -297,12 +220,13 @@ function PriceSparkline({ data, currentPrice, allTimeLow }) {
 /*  Main panel                                                           */
 /* ===================================================================== */
 
-export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], dealsByOrigin = {} }) {
+export default function FareDetailPanel({ deal, onClose, routeOrigins = [], dealsByOrigin = {} }) {
   const [offers,        setOffers]        = useState(null);
   const [enrichment,    setEnrichment]    = useState(null);
   const [history,       setHistory]       = useState(null);
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [loadingEnrich, setLoadingEnrich] = useState(true);
+  const [activeTab,     setActiveTab]     = useState("fare"); // 'fare' | 'verify' | 'nearby'
 
   /* Close on Escape */
   useEffect(() => {
@@ -514,230 +438,252 @@ export default function TicketDetailPanel({ deal, onClose, routeOrigins = [], de
               </div>
             </div>
 
+            {/* ── Tab bar ─────────────────────────────────────── */}
+            <div className="flex items-stretch border-b border-zinc-800 bg-zinc-950/60">
+              {[
+                { key: "fare",   label: "Fare" },
+                { key: "verify", label: "Verify the price" },
+                { key: "nearby", label: "Alternatives" },
+              ].map((t) => {
+                const isActive = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => setActiveTab(t.key)}
+                    className={`relative px-5 py-3 text-xs font-medium tracking-wide uppercase transition-colors
+                                ${isActive ? "text-champagne" : "text-zinc-500 hover:text-zinc-300"}`}
+                  >
+                    {t.label}
+                    {isActive && (
+                      <span className="absolute inset-x-3 bottom-0 h-0.5 bg-champagne rounded-t-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* ── Body ───────────────────────────────────────────── */}
-            <div className="grid lg:grid-cols-[1.4fr_1fr] divide-x-0 lg:divide-x divide-zinc-800
-                            max-h-[70vh] overflow-y-auto">
+            <div className="max-h-[70vh] overflow-y-auto">
 
-              {/* ── LEFT: data + visualizations ────────────────── */}
-              <div className="p-7 space-y-7">
-
-                {/* Cross-platform compare — replaces the misleading "GEM" framing */}
-                <Section
-                  label="Verify the price"
-                  hint="Open the same flight on each platform. We pulled this fare from Google Flights — these links let you see what the same date returns elsewhere."
-                >
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {compareLinks.map((link) => (
-                      <a
-                        key={link.name}
-                        href={link.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg
-                                   bg-zinc-900/60 border border-zinc-800 hover:border-champagne/40
-                                   hover:bg-zinc-900 transition-colors group"
-                      >
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span
-                            className="w-2 h-2 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: link.color }}
-                          />
-                          <span className="text-xs font-medium text-zinc-200 truncate">{link.short}</span>
-                        </span>
-                        <span className="text-2xs text-zinc-500 group-hover:text-champagne transition-colors">↗</span>
-                      </a>
-                    ))}
-                  </div>
-                </Section>
-
-                {/* Price position */}
-                {deal.typical_price_low && deal.typical_price_high && (
-                  <Section
-                    label="Where this fare sits"
-                    hint={
-                      savings != null && savings > 0
-                        ? `$${savings.toLocaleString()} below Google's typical (${savingsPct}% off).`
-                        : "Position against Google's typical price range for this route."
-                    }
-                  >
-                    <PricePositionBar
-                      price={deal.best_price_usd}
-                      low={deal.typical_price_low}
-                      high={deal.typical_price_high}
-                      allTimeLow={allTimeLow}
-                    />
-                  </Section>
-                )}
-
-                {/* Recent history sparkline */}
-                {history && history.length >= 2 && (
-                  <Section
-                    label="Last 30 days"
-                    hint={
-                      allTimeLow
-                        ? `All-time low for this route: $${Math.round(allTimeLow).toLocaleString()}.`
-                        : "Recent price trend for this exact route + cabin."
-                    }
-                  >
-                    <PriceSparkline
-                      data={history}
-                      currentPrice={deal.best_price_usd}
-                      allTimeLow={allTimeLow}
-                    />
-                  </Section>
-                )}
-
-                {/* Score donut + radar */}
-                <Section
-                  label="Why we scored it"
-                  hint={coldStart ? "Most signals strengthen after 30+ days of price history." : null}
-                >
-                  <div className="flex items-center gap-6">
-                    <ScoreDonut score={deal.score_total} max={170} />
-                    <div className="flex-1 min-w-0">
-                      <ScoreRadar deal={deal} />
-                    </div>
-                  </div>
-                </Section>
-
-                {/* All flight options */}
-                <Section
-                  label="All airlines on this date"
-                  hint="Cheapest fare per airline for the selected departure. Click a logo to compare."
-                >
-                  {loadingOffers ? (
-                    <div className="h-16 rounded-lg bg-zinc-900/60 animate-pulse" />
-                  ) : offers?.length > 0 ? (
-                    <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800">
-                      {offers.slice(0, 8).map((offer, i) => (
-                        <OfferRow key={offer.id ?? i} offer={offer} deal={deal} index={i} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-zinc-500 italic">
-                      No offer breakdown yet — run Scan Now to populate per-airline prices.
-                    </p>
-                  )}
-                </Section>
-              </div>
-
-              {/* ── RIGHT: cabin / award / AI / nearby ───────────── */}
-              <div className="p-7 space-y-7 bg-zinc-950/50">
-
-                {/* Cabin product */}
-                {cabinInfo && (
-                  <Section label="Cabin">
-                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-zinc-100 leading-tight">{cabinInfo.product_name}</p>
-                          <p className="text-2xs text-zinc-500 mt-0.5">
-                            {cabinInfo.configuration} · {cabinInfo.seat_type?.replace("-", " ")}
-                          </p>
+              {/* ── TAB: FARE ─────────────────────────────────── */}
+              {activeTab === "fare" && (
+                <div className="grid lg:grid-cols-[1.4fr_1fr] divide-x-0 lg:divide-x divide-zinc-800">
+                  <div className="p-7 space-y-7">
+                    {/* All flight options */}
+                    <Section
+                      label="All airlines on this date"
+                      hint="Cheapest fare per airline for the selected departure."
+                    >
+                      {loadingOffers ? (
+                        <div className="h-16 rounded-lg bg-zinc-900/60 animate-pulse" />
+                      ) : offers?.length > 0 ? (
+                        <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800">
+                          {offers.slice(0, 8).map((offer, i) => (
+                            <OfferRow key={offer.id ?? i} offer={offer} deal={deal} index={i} />
+                          ))}
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <span className="font-serif text-2xl text-champagne tabular-nums">
-                            {cabinInfo.quality_score}
-                          </span>
-                          <span className="text-xs text-zinc-600">/100</span>
+                      ) : (
+                        <p className="text-xs text-zinc-500 italic">
+                          No offer breakdown yet — run Scan Now to populate per-airline prices.
+                        </p>
+                      )}
+                    </Section>
+
+                    {/* AI analysis */}
+                    {rec && (
+                      <Section label="AI analysis">
+                        <div className="rounded-lg bg-zinc-900/40 border border-zinc-800 p-4">
+                          <FormattedText text={rec} />
                         </div>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {cabinInfo.lie_flat       && <Pill>Lie-flat</Pill>}
-                        {cabinInfo.has_door       && <Pill>Private door</Pill>}
-                        {cabinInfo.bed_length_cm  && <Pill>{cabinInfo.bed_length_cm}cm bed</Pill>}
-                        {cabinInfo.seat_width_cm  && <Pill>{cabinInfo.seat_width_cm}cm wide</Pill>}
-                      </div>
-                    </div>
-                  </Section>
-                )}
-
-                {/* Lounge access */}
-                {lounge && (deal.cabin_class === "BUSINESS" || deal.cabin_class === "FIRST") && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-champagne/5 border border-champagne/20">
-                    <svg className="w-4 h-4 text-champagne flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M2 5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V5zm1 7a1 1 0 0 1 1-1h8a1 1 0 0 1 0 2H4a1 1 0 0 1-1-1z"/>
-                    </svg>
-                    <span className="text-xs text-zinc-300">
-                      <span className="font-medium text-champagne">{lounge.name}</span> lounge access
-                    </span>
+                      </Section>
+                    )}
                   </div>
-                )}
 
-                {/* Award options — only when we actually have data */}
-                {!loadingEnrich && enrichment?.awards?.length > 0 && (
-                  <Section label="Award options" hint="Live miles availability via Seats.aero.">
-                    <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800">
-                      {enrichment.awards.slice(0, 4).map((award, i) => {
-                        const aXfers = transferPartners[award.loyalty_program] ?? [];
-                        return (
-                          <div
-                            key={`${award.loyalty_program}-${i}`}
-                            className={`px-4 py-3 ${i === 0 ? "bg-champagne/5" : "bg-zinc-900/40"}`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-zinc-100">
-                                  {award.loyalty_program}
-                                  {i === 0 && (
-                                    <span className="ml-2 text-2xs text-champagne font-bold">BEST VALUE</span>
-                                  )}
-                                </p>
-                                <p className="text-2xs text-zinc-500 mt-0.5">
-                                  {award.seats_available} seat{award.seats_available !== 1 ? "s" : ""}
-                                  {award.cash_taxes_usd > 0 && ` · $${Math.round(award.cash_taxes_usd).toLocaleString()} taxes`}
-                                </p>
-                                {aXfers.length > 0 && (
-                                  <p className="text-2xs text-zinc-500 mt-1">
-                                    Transfer from <span className="text-zinc-300">{aXfers.join(", ")}</span>
-                                  </p>
-                                )}
-                              </div>
-                              <div className="text-right flex-shrink-0">
-                                <p className="text-sm font-bold text-zinc-100 tabular-nums">
-                                  {award.miles_cost.toLocaleString()}
-                                  <span className="text-2xs text-zinc-600 ml-0.5">pts</span>
-                                </p>
-                                {award.cpp_value != null && (
-                                  <p className="text-2xs text-champagne tabular-nums font-semibold mt-0.5">
-                                    {award.cpp_value.toFixed(2)}¢/pt
-                                  </p>
-                                )}
-                              </div>
+                  <div className="p-7 space-y-7 bg-zinc-950/50">
+                    {/* Cabin product */}
+                    {cabinInfo && (
+                      <Section label="Cabin">
+                        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-zinc-100 leading-tight">{cabinInfo.product_name}</p>
+                              <p className="text-2xs text-zinc-500 mt-0.5">
+                                {cabinInfo.configuration} · {cabinInfo.seat_type?.replace("-", " ")}
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="font-serif text-2xl text-champagne tabular-nums">
+                                {cabinInfo.quality_score}
+                              </span>
+                              <span className="text-xs text-zinc-600">/100</span>
                             </div>
                           </div>
-                        );
-                      })}
+                          <div className="flex flex-wrap gap-1.5 mt-3">
+                            {cabinInfo.lie_flat       && <Pill>Lie-flat</Pill>}
+                            {cabinInfo.has_door       && <Pill>Private door</Pill>}
+                            {cabinInfo.bed_length_cm  && <Pill>{cabinInfo.bed_length_cm}cm bed</Pill>}
+                            {cabinInfo.seat_width_cm  && <Pill>{cabinInfo.seat_width_cm}cm wide</Pill>}
+                          </div>
+                        </div>
+                      </Section>
+                    )}
+
+                    {/* Lounge access */}
+                    {lounge && (deal.cabin_class === "BUSINESS" || deal.cabin_class === "FIRST") && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-champagne/5 border border-champagne/20">
+                        <svg className="w-4 h-4 text-champagne flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M2 5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V5zm1 7a1 1 0 0 1 1-1h8a1 1 0 0 1 0 2H4a1 1 0 0 1-1-1z"/>
+                        </svg>
+                        <span className="text-xs text-zinc-300">
+                          <span className="font-medium text-champagne">{lounge.name}</span> lounge access
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Award options — only when we actually have data */}
+                    {!loadingEnrich && enrichment?.awards?.length > 0 && (
+                      <Section label="Award options" hint="Live miles availability via Seats.aero.">
+                        <div className="rounded-lg border border-zinc-800 overflow-hidden divide-y divide-zinc-800">
+                          {enrichment.awards.slice(0, 4).map((award, i) => {
+                            const aXfers = transferPartners[award.loyalty_program] ?? [];
+                            return (
+                              <div
+                                key={`${award.loyalty_program}-${i}`}
+                                className={`px-4 py-3 ${i === 0 ? "bg-champagne/5" : "bg-zinc-900/40"}`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-zinc-100">
+                                      {award.loyalty_program}
+                                      {i === 0 && (
+                                        <span className="ml-2 text-2xs text-champagne font-bold">BEST VALUE</span>
+                                      )}
+                                    </p>
+                                    <p className="text-2xs text-zinc-500 mt-0.5">
+                                      {award.seats_available} seat{award.seats_available !== 1 ? "s" : ""}
+                                      {award.cash_taxes_usd > 0 && ` · $${Math.round(award.cash_taxes_usd).toLocaleString()} taxes`}
+                                    </p>
+                                    {aXfers.length > 0 && (
+                                      <p className="text-2xs text-zinc-500 mt-1">
+                                        Transfer from <span className="text-zinc-300">{aXfers.join(", ")}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    <p className="text-sm font-bold text-zinc-100 tabular-nums">
+                                      {award.miles_cost.toLocaleString()}
+                                      <span className="text-2xs text-zinc-600 ml-0.5">pts</span>
+                                    </p>
+                                    {award.cpp_value != null && (
+                                      <p className="text-2xs text-champagne tabular-nums font-semibold mt-0.5">
+                                        {award.cpp_value.toFixed(2)}¢/pt
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </Section>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── TAB: VERIFY ───────────────────────────────── */}
+              {activeTab === "verify" && (
+                <div className="p-7 space-y-7">
+                  <Section
+                    label="Compare on other platforms"
+                    hint="Open the same flight elsewhere. We pulled this fare from Google Flights — these links let you confirm it's the real market floor."
+                  >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {compareLinks.map((link) => (
+                        <a
+                          key={link.name}
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg
+                                     bg-zinc-900/60 border border-zinc-800 hover:border-champagne/40
+                                     hover:bg-zinc-900 transition-colors group"
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: link.color }}
+                            />
+                            <span className="text-xs font-medium text-zinc-200 truncate">{link.short}</span>
+                          </span>
+                          <span className="text-2xs text-zinc-500 group-hover:text-champagne transition-colors">↗</span>
+                        </a>
+                      ))}
                     </div>
                   </Section>
-                )}
 
-                {/* Nearby airports map (only when there are alternates) */}
-                {(routeOrigins.length > 1 || Object.keys(dealsByOrigin).length > 1) && (
-                  <Section label="Nearby airports" hint="Compare departure options that might save more.">
-                    <div className="rounded-lg overflow-hidden border border-zinc-800">
-                      <AirportComparisonMap
-                        originCodes={routeOrigins.length > 0 ? routeOrigins : [deal.origin]}
-                        destCodes={[deal.destination]}
-                        dealsByOrigin={
-                          Object.keys(dealsByOrigin).length > 0
-                            ? dealsByOrigin
-                            : { [deal.origin]: { price_usd: deal.best_price_usd, departure_date: deal.departure_date } }
-                        }
+                  {deal.typical_price_low && deal.typical_price_high && (
+                    <Section
+                      label="Where this fare sits"
+                      hint={
+                        savings != null && savings > 0
+                          ? `$${savings.toLocaleString()} below Google's typical (${savingsPct}% off).`
+                          : "Position against Google's typical price range for this route."
+                      }
+                    >
+                      <PricePositionBar
+                        price={deal.best_price_usd}
+                        low={deal.typical_price_low}
+                        high={deal.typical_price_high}
+                        allTimeLow={allTimeLow}
                       />
-                    </div>
-                  </Section>
-                )}
+                    </Section>
+                  )}
 
-                {/* AI analysis */}
-                {rec && (
-                  <Section label="AI analysis">
-                    <div className="rounded-lg bg-zinc-900/40 border border-zinc-800 p-4">
-                      <FormattedText text={rec} />
-                    </div>
-                  </Section>
-                )}
-              </div>
+                  {history && history.length >= 2 && (
+                    <Section
+                      label="Last 30 days"
+                      hint={
+                        allTimeLow
+                          ? `All-time low for this route: $${Math.round(allTimeLow).toLocaleString()}.`
+                          : "Recent price trend for this exact route + cabin."
+                      }
+                    >
+                      <PriceSparkline
+                        data={history}
+                        currentPrice={deal.best_price_usd}
+                        allTimeLow={allTimeLow}
+                      />
+                    </Section>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB: NEARBY / ALTERNATIVES ────────────────── */}
+              {activeTab === "nearby" && (
+                <div className="p-7 space-y-7">
+                  {(routeOrigins.length > 1 || Object.keys(dealsByOrigin).length > 1) ? (
+                    <Section label="Nearby airports" hint="Compare departure options that might save more.">
+                      <div className="rounded-lg overflow-hidden border border-zinc-800">
+                        <AirportComparisonMap
+                          originCodes={routeOrigins.length > 0 ? routeOrigins : [deal.origin]}
+                          destCodes={[deal.destination]}
+                          dealsByOrigin={
+                            Object.keys(dealsByOrigin).length > 0
+                              ? dealsByOrigin
+                              : { [deal.origin]: { price_usd: deal.best_price_usd, departure_date: deal.departure_date } }
+                          }
+                        />
+                      </div>
+                    </Section>
+                  ) : (
+                    <p className="text-sm text-zinc-500 italic">
+                      No nearby airport alternatives configured for this route. Add more origin airports to enable comparison.
+                    </p>
+                  )}
+                </div>
+              )}
+
             </div>
           </div>
         </div>

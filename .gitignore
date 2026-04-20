@@ -70,3 +70,4 @@ nginx/ssl/
 *.dump
 *.bak
 *.backup
+datascience.txt

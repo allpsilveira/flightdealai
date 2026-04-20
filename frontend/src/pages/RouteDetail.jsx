@@ -10,7 +10,7 @@ import api from "../lib/api";
 import { useRoutesStore } from "../stores/useRoutes";
 import ActivityTimeline from "../components/ActivityTimeline";
 import AirlineLeaderboard from "../components/AirlineLeaderboard";
-import TicketDetailPanel from "../components/TicketDetailPanel";
+import FareDetailPanel from "../components/FareDetailPanel";
 import FormattedText from "../components/FormattedText";
 import EnhancedPriceChart from "../components/EnhancedPriceChart";
 import CheapestDateStrip from "../components/CheapestDateStrip";
@@ -106,6 +106,7 @@ export default function RouteDetail() {
   const [routeEvents,    setRouteEvents]     = useState([]);
   const [forecast,       setForecast]        = useState(null);
   const [timelineMode,   setTimelineMode]    = useState("events"); // events | scans
+  const [fareSortMode,   setFareSortMode]    = useState("cheapest"); // cheapest | value | fastest | direct
 
   const route = routes.find((r) => r.id === id) ?? null;
 
@@ -450,11 +451,39 @@ export default function RouteDetail() {
         {/* ── Right: Leaderboard + Award + AI ────────────────────────── */}
         <div className="lg:w-[460px] xl:w-[520px] p-6 sm:p-8 space-y-5 flex-shrink-0">
 
-          {/* Airline leaderboard */}
+          {/* Best fares right now */}
           <div>
-            <p className="text-2xs font-semibold text-zinc-500 uppercase tracking-[0.15em] mb-3">
-              Airline Prices
-            </p>
+            <div className="flex items-baseline justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold text-zinc-500 uppercase tracking-[0.15em]">
+                  Best fares right now
+                </p>
+                {bestOffers.length > 0 && (() => {
+                  const ts = bestOffers
+                    .map((o) => o.scanned_at || o.created_at)
+                    .filter(Boolean)
+                    .sort()
+                    .pop();
+                  if (!ts) return null;
+                  const d = new Date(ts);
+                  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+                  const ago = mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.round(mins/60)}h ago` : `${Math.round(mins/1440)}d ago`;
+                  return <p className="text-2xs text-zinc-600 mt-0.5">as of {ago}</p>;
+                })()}
+              </div>
+              <select
+                value={fareSortMode}
+                onChange={(e) => setFareSortMode(e.target.value)}
+                className="text-2xs bg-zinc-900/60 border border-zinc-800 rounded-md px-2 py-1 text-zinc-300
+                           hover:border-champagne/40 focus:outline-none focus:border-champagne transition-colors
+                           cursor-pointer"
+              >
+                <option value="cheapest">Cheapest</option>
+                <option value="value">Best value</option>
+                <option value="fastest">Fastest</option>
+                <option value="direct">Direct only</option>
+              </select>
+            </div>
             <div className="card p-2">
               <AirlineLeaderboard
                 offers={bestOffers}
@@ -462,6 +491,7 @@ export default function RouteDetail() {
                 dealMap={dealMap}
                 onSelect={setSelectedDeal}
                 selectedDeal={selectedDeal}
+                sortMode={fareSortMode}
               />
             </div>
           </div>
@@ -533,9 +563,9 @@ export default function RouteDetail() {
         </div>
       </div>
 
-      {/* ── Level 3: Ticket Detail Panel ──────────────────────────────── */}
+      {/* ── Level 3: Fare Detail Panel ────────────────────────────────── */}
       {selectedDeal && (
-        <TicketDetailPanel
+        <FareDetailPanel
           deal={selectedDeal}
           onClose={() => setSelectedDeal(null)}
           routeOrigins={route?.origins ?? []}

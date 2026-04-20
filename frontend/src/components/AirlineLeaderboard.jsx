@@ -51,7 +51,7 @@ function StopBadge({ stops }) {
   return <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">{stops} stop{stops > 1 ? "s" : ""}</span>;
 }
 
-export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSelect, selectedDeal }) {
+export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSelect, selectedDeal, sortMode = "cheapest" }) {
   if (!offers || offers.length === 0) {
     return (
       <div className="text-center py-10 px-4">
@@ -74,7 +74,23 @@ export default function AirlineLeaderboard({ offers, parentDeal, dealMap, onSele
     }
   }
 
-  const rows = [...byCombo.values()].sort((a, b) => a.price_usd - b.price_usd).slice(0, 7);
+  // Apply sort & filter mode
+  let workingSet = [...byCombo.values()];
+  if (sortMode === "direct") {
+    workingSet = workingSet.filter((o) => (o.stops ?? 0) === 0);
+  }
+  const sorters = {
+    cheapest: (a, b) => a.price_usd - b.price_usd,
+    fastest:  (a, b) => (a.duration_minutes ?? 9e9) - (b.duration_minutes ?? 9e9),
+    direct:   (a, b) => a.price_usd - b.price_usd,
+    value:    (a, b) => {
+      // Lower price is good, fewer stops is good, shorter duration is good
+      const score = (o) =>
+        (o.price_usd ?? 0) + (o.stops ?? 0) * 200 + ((o.duration_minutes ?? 0) / 60) * 25;
+      return score(a) - score(b);
+    },
+  };
+  const rows = workingSet.sort(sorters[sortMode] ?? sorters.cheapest).slice(0, 7);
   const cheapestPrice = rows[0]?.price_usd ?? 0;
 
   // Baseline for value calculation: cheapest direct flight, or cheapest overall
