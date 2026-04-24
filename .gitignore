@@ -77,3 +77,9 @@ nginx/ssl/
 *.bak
 *.backup
 datascience.txt
+
+# Ignore top-level node modules (some projects install at repo root)
+node_modules/
+
+# Ignore generated Playwright HTML report
+frontend/playwright-report/
