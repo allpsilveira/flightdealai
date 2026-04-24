@@ -16,6 +16,7 @@ from app.models.intelligence import (
     DealOutcome,
 )
 from app.models.saved import SavedItem, ShareLink
+from app.models.tracked_flight import TrackedFlight
 
 __all__ = [
     "User",
@@ -36,4 +37,7 @@ __all__ = [
     "ApiUsageLog",
     "ScoringWeights",
     "DealOutcome",
+    "SavedItem",
+    "ShareLink",
+    "TrackedFlight",
 ]

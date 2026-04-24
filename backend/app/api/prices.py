@@ -43,6 +43,7 @@ async def compare_airports(
     db: AsyncSession = Depends(get_db),
 ):
     """Aggregates per-origin stats for a route — powers the Airport Comparison page."""
+    cabin_class = (cabin_class or "").strip().upper().replace("-", "_").replace(" ", "_")
     result = await db.execute(
         text("""
             SELECT
@@ -94,6 +95,9 @@ async def price_history(
     "Scan Now" issued after the scheduled scan supersedes it for that day. Then
     we aggregate across departure_dates within the scan-day for chart stats.
     """
+    origin = (origin or "").strip().upper()
+    destination = (destination or "").strip().upper()
+    cabin_class = (cabin_class or "").strip().upper().replace("-", "_").replace(" ", "_")
     result = await db.execute(
         text("""
             WITH latest_per_day_per_dep AS (

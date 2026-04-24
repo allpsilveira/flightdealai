@@ -21,6 +21,7 @@ from dags.tasks import (
     fetch_awards,
     cross_reference,
     score_deal,
+    generate_events,
     ai_analysis,
     dispatch_alerts,
     update_priority,
@@ -69,18 +70,30 @@ def _get_active_routes() -> list[dict]:
         return _ROUTES_CACHE.get("data", [])
 
 
-def _schedule_for_tier(tier: str) -> str:
-    """HOT = every 2h, WARM = every 4h, COLD = every 8h."""
-    return {"HOT": "0 */2 * * *", "WARM": "0 */4 * * *", "COLD": "0 */8 * * *"}.get(tier, "0 */4 * * *")
+def _schedule_for_mode(scan_mode: str, tier: str) -> str:
+    """3-tier scan strategy (Plan v3 P0.3):
+       quick — every 4h tripwire (3 cheapest dates only)
+       full  — 3x/day full sweep (all dates, deep)
+       daily — once daily 7am UTC (full + force enrich Duffel + Seats.aero)
+       Tier still nudges cadence: HOT routes get a quicker tripwire.
+    """
+    if scan_mode == "quick":
+        return {"HOT": "0 */2 * * *", "WARM": "0 */4 * * *", "COLD": "0 */6 * * *"}.get(tier, "0 */4 * * *")
+    if scan_mode == "full":
+        return "0 6,14,22 * * *"
+    if scan_mode == "daily":
+        return "0 7 * * *"
+    return "0 */4 * * *"
 
 
-def _make_dag(route: dict, cabin_class: str) -> DAG:
+def _make_dag(route: dict, cabin_class: str, scan_mode: str = "full") -> DAG:
     route_id     = route["id"]
     short_id     = route_id.replace("-", "")[:8]
-    dag_id       = f"scan_{short_id}_{cabin_class.lower()}"
-    schedule     = _schedule_for_tier(route.get("priority_tier", "WARM"))
+    dag_id       = f"scan_{short_id}_{cabin_class.lower()}_{scan_mode}"
+    schedule     = _schedule_for_mode(scan_mode, route.get("priority_tier", "WARM"))
     origins      = route["origins"]
     destinations = route["destinations"]
+    deep         = scan_mode != "quick"
 
     with DAG(
         dag_id=dag_id,
@@ -90,8 +103,8 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
         catchup=False,
         concurrency=4,         # max 4 tasks running in parallel for this DAG
         max_active_runs=1,     # only 1 active run of this exact DAG at a time
-        tags=["scan", cabin_class.lower(), route.get("priority_tier", "WARM").lower()],
-        doc_md=f"Scan DAG for route '{route['name']}' — {cabin_class}",
+        tags=["scan", cabin_class.lower(), scan_mode, route.get("priority_tier", "WARM").lower()],
+        doc_md=f"Scan DAG ({scan_mode}) for route '{route['name']}' — {cabin_class}",
     ) as dag:
 
         # ── SerpApi fetch (Google Flights) ─────────────────────────────────
@@ -103,7 +116,8 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
                 "origins":     origins,
                 "destinations": destinations,
                 "cabin_class": cabin_class,
-                "deep":        True,
+                "deep":        deep,
+                "scan_mode":   scan_mode,
             },
             sla=timedelta(minutes=5),
             execution_timeout=timedelta(minutes=10),
@@ -121,6 +135,14 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
             task_id="score_deal",
             python_callable=score_deal.run,
             op_kwargs={"route_id": route_id, "cabin_class": cabin_class},
+        )
+
+        # ── Generate route events (always runs after score) ─────────────────
+        t_events = PythonOperator(
+            task_id="generate_events",
+            python_callable=generate_events.run,
+            op_kwargs={"route_id": route_id, "cabin_class": cabin_class},
+            trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
         )
 
         # ── Branch: score ≥ 3.0 → AI analysis, else skip ───────────────────
@@ -144,11 +166,15 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
             op_kwargs={"route_id": route_id, "cabin_class": cabin_class},
         )
 
-        # ── Branch: BUY/GEM → enrich with Duffel + Awards ─────────────────
+        # ── Branch: enrich with Duffel + Awards for daily/on-demand or BUY/GEM
+        # Spec: Duffel + Seats.aero run daily at 7 AM and on Scan Now — NOT score-gated.
         def _branch_action(**ctx):
+            trigger_type = ctx["dag_run"].conf.get("trigger_type", "") if ctx.get("dag_run") else ""
+            force_enrich = ctx["ti"].xcom_pull(task_ids="fetch_serpapi", key="force_enrich") or False
             action = ctx["ti"].xcom_pull(task_ids="score_deal", key="action") or "SKIP"
-            is_gem = ctx["ti"].xcom_pull(task_ids="score_deal", key="is_gem") or False
-            if action in ("STRONG_BUY", "BUY") or is_gem:
+            is_gem  = ctx["ti"].xcom_pull(task_ids="score_deal", key="is_gem") or False
+            always_enrich = bool(force_enrich) or trigger_type in ("daily_7am", "scan_now")
+            if always_enrich or action in ("STRONG_BUY", "BUY") or is_gem:
                 return "enrich_duffel"
             return "update_dashboard"
 
@@ -190,7 +216,7 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
         )
 
         # ── Wire ───────────────────────────────────────────────────────────
-        t_serpapi >> t_xref >> t_score >> t_branch
+        t_serpapi >> t_xref >> t_score >> t_events >> t_branch
         t_branch >> [t_ai, t_log_skip]
         t_ai >> t_branch2
         t_branch2 >> [t_duffel, t_dashboard]
@@ -201,7 +227,9 @@ def _make_dag(route: dict, cabin_class: str) -> DAG:
 
 
 # ── Generate DAGs at import time ──────────────────────────────────────────────
+# 3 DAGs per (route, cabin): quick / full / daily — see _schedule_for_mode().
 for _route in _get_active_routes():
     for _cabin in _route.get("cabin_classes", []):
-        _dag = _make_dag(_route, _cabin)
-        globals()[_dag.dag_id] = _dag
+        for _mode in ("quick", "full", "daily"):
+            _dag = _make_dag(_route, _cabin, scan_mode=_mode)
+            globals()[_dag.dag_id] = _dag

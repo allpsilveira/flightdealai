@@ -86,8 +86,8 @@ async def run_pipeline(
     xref = cross_reference(google_result=google_result)
 
     if not xref["best_price_usd"]:
-        logger.debug("pipeline_no_price", origin=origin, destination=destination,
-                     cabin=cabin_class, date=str(departure_date))
+        logger.info("pipeline_no_price", origin=origin, destination=destination,
+                    cabin=cabin_class, date=str(departure_date))
         return None
 
     # ── Step 2: Rolling statistics ─────────────────────────────────────────────

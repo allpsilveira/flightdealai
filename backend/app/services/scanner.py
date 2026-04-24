@@ -115,6 +115,7 @@ async def scan_route(
     deep: bool = True,
     trip_type: str = "ONE_WAY",
     return_date_offset_days: int | None = None,
+    prefs: dict | None = None,
 ) -> dict[str, Any]:
     """
     Scan a route via SerpApi (Google Flights).
@@ -163,6 +164,7 @@ async def scan_route(
             deep=deep,
             trip_type=trip_type,
             return_date_offset_days=return_date_offset_days,
+            prefs=prefs,
         )
         for origin in origins
         for dest in destinations
@@ -218,6 +220,7 @@ async def _run_serpapi(
     deep: bool = True,
     trip_type: str = "ONE_WAY",
     return_date_offset_days: int | None = None,
+    prefs: dict | None = None,
 ) -> dict | None:
     return_date = (dep_date + timedelta(days=return_date_offset_days)) if (
         trip_type == "ROUND_TRIP" and return_date_offset_days
@@ -226,6 +229,7 @@ async def _run_serpapi(
     price = await serpapi_client.search_flights(
         origin, dest, dep_date, cabin,
         deep=deep, trip_type=trip_type, return_date=return_date,
+        prefs=prefs,
     )
     if price and price.get("price_usd", 0) > 0:
         # Store best price without the offers list (not a GooglePrice column)

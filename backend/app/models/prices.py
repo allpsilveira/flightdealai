@@ -64,6 +64,22 @@ class FlightOffer(Base):
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_direct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # ── Plan v3 P1.1 — richer offer fields ────────────────────────────────────
+    legroom_inches: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    amenities: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    carbon_grams: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    carbon_typical_grams: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    layovers: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    also_sold_by: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    booking_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    booking_options: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    aircraft_iata: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    cabin_quality_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cabin_product_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    cabin_seat_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cabin_has_door: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    cabin_lie_flat: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
 
 class DuffelPrice(Base):
     """Direct airline cash price + fare brand + conditions from Duffel. Daily enrichment."""
@@ -87,6 +103,22 @@ class DuffelPrice(Base):
     airline_codes: Mapped[list[str]] = mapped_column(ARRAY(String(3)), nullable=False, default=list)
     raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
+    # ── Plan v3 P1.1 — richer Duffel fields ───────────────────────────────────
+    base_amount_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tax_amount_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cabin_marketing_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    aircraft_iata: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    baggages: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    available_services: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    payment_requires_instant: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    price_guarantee_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    operating_carrier: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    marketing_carrier: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cabin_quality_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cabin_product_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    cabin_lie_flat: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
 
 class AwardPrice(Base):
     """Award/miles availability from Seats.aero. Daily enrichment."""
@@ -106,3 +138,17 @@ class AwardPrice(Base):
     operating_airline: Mapped[str | None] = mapped_column(String(3), nullable=True)
     cpp_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     raw_response: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # ── Plan v3 P1.1 — richer Seats.aero fields ───────────────────────────────
+    seats_directs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    available_boolean: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    created_at_source: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at_source: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    availability_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    origin_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    origin_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dest_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dest_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    booking_link_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stops: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    flight_numbers: Mapped[str | None] = mapped_column(Text, nullable=True)

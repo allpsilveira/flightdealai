@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, func, text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,6 +33,26 @@ class Route(Base):
     max_drive_hours: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     # HOT | WARM | COLD — updated by priority engine
     priority_tier: Mapped[str] = mapped_column(String(10), default="WARM", nullable=False)
+
+    # ── Plan v3 P1.2 — Route preferences (passed through to APIs) ─────────────
+    max_budget_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    outbound_time_window: Mapped[str | None] = mapped_column(String(11), nullable=True)
+    return_time_window: Mapped[str | None] = mapped_column(String(11), nullable=True)
+    preferred_airlines: Mapped[list[str] | None] = mapped_column(ARRAY(String(3)), nullable=True)
+    excluded_airlines: Mapped[list[str] | None] = mapped_column(ARRAY(String(3)), nullable=True)
+    max_stops: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_layover_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    excluded_connection_airports: Mapped[list[str] | None] = mapped_column(ARRAY(String(3)), nullable=True)
+    max_total_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    low_carbon_only: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    preferred_award_programs: Mapped[list[str] | None] = mapped_column(ARRAY(String(30)), nullable=True)
+    passengers: Mapped[list] = mapped_column(
+        JSONB, nullable=False,
+        server_default=text("""'[{"type":"adult"}]'::jsonb"""),
+        default=lambda: [{"type": "adult"}],
+    )
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

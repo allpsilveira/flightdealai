@@ -56,6 +56,9 @@ class DealAnalysis(Base):
     best_award_miles: Mapped[int | None] = mapped_column(Integer, nullable=True)
     best_award_program: Mapped[str | None] = mapped_column(String(50), nullable=True)
     best_cpp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Percentage below the midpoint of Google's typical price range (positive = cheaper).
+    # None when Google has no typical range data for this scan.
+    discount_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # ── AI recommendation ─────────────────────────────────────────────────────
     ai_recommendation_en: Mapped[str | None] = mapped_column(Text, nullable=True)

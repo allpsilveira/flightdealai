@@ -180,16 +180,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: dev
+      target: prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://flyluxurydeals.com}
+        VITE_WS_URL: ${VITE_WS_URL:-wss://flyluxurydeals.com/ws}
+        VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY:-}
     restart: unless-stopped
-    environment:
-      VITE_API_URL: http://localhost/api
-      VITE_WS_URL: ws://localhost/ws
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     ports:
-      - "5173:5173"
+      - "5173:80"
     networks:
       - flightdeal
 

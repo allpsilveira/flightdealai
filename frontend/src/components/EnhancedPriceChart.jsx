@@ -64,17 +64,35 @@ export default function EnhancedPriceChart({
   // Combine history + forecast tail into one dataset
   const data = useMemo(() => {
     const base = filteredHistory.map((h) => ({ ...h, _isHistory: true }));
-    if (forecast?.points?.length) {
-      forecast.points.forEach((p) => {
-        base.push({
-          bucket: p.date,
-          forecast: p.predicted_price,
-          forecast_low: p.confidence_low,
-          forecast_high: p.confidence_high,
-          _isForecast: true,
-        });
+    if (!forecast) return base;
+
+    // Normalize different forecast shapes (backend may return `points` or `forecasts`)
+    const points = (Array.isArray(forecast.points) && forecast.points.length)
+      ? forecast.points.map((p) => ({
+          date: p.date,
+          predicted: p.predicted_price ?? p.predicted,
+          low: p.confidence_low ?? p.conf_low,
+          high: p.confidence_high ?? p.conf_high,
+        }))
+      : (Array.isArray(forecast.forecasts) && forecast.forecasts.length)
+        ? forecast.forecasts.map((p) => ({
+            date: p.date,
+            predicted: p.predicted,
+            low: p.conf_low,
+            high: p.conf_high,
+          }))
+        : [];
+
+    points.forEach((p) => {
+      base.push({
+        bucket: p.date,
+        forecast: p.predicted,
+        forecast_low: p.low,
+        forecast_high: p.high,
+        _isForecast: true,
       });
-    }
+    });
+
     return base;
   }, [filteredHistory, forecast]);
 

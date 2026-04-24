@@ -1,0 +1,10 @@
+# ml_models/
+#
+# Trained model artifacts are written here by the ml_retrain DAG (Sundays 03:00 UTC).
+# Files committed to git: this .gitkeep only.
+# Actual artifacts (.joblib) are excluded via .gitignore.
+#
+# Expected contents after first retrain:
+#   forecaster_{route_id}_{cabin}.joblib   — AutoARIMA
+#   anomaly_{route_id}_{cabin}.joblib      — IsolationForest
+#   expected_price_global.joblib           — LightGBM regressor

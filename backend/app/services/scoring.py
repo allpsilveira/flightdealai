@@ -72,6 +72,7 @@ def score_deal(
         "google_price_level":   google_result.get("price_level") if google_result else None,
         "seats_remaining":      xref.get("seats_remaining"),
         "fare_brand_name":      duffel_result.get("fare_brand_name") if duffel_result else None,
+        "discount_pct":         xref.get("discount_pct"),
     }
 
 

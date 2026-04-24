@@ -59,18 +59,34 @@ def cross_reference(
     threshold = best_price * 1.05
     confirmed = [src for src, p in prices.items() if p <= threshold]
 
-    # GEM: price is significantly below Google's typical range
-    is_gem = False
+    # GEM: Duffel surfaced a fare that Google Flights has no result for.
+    # This means the airline published it directly through GDS but it did not
+    # appear in Google's aggregation — exclusive intel.
+    is_gem = (
+        duffel_result is not None
+        and duffel_result.get("price_usd") is not None
+        and (google_result is None or not google_result.get("price_usd"))
+    )
+
+    # discount_pct: how far below the midpoint of Google's typical price
+    # range the best price sits.  Positive = cheaper than typical midpoint.
+    # None when no typical range data is available.
+    discount_pct: float | None = None
     if google_result:
-        typical_high = google_result.get("typical_price_high")
-        if typical_high and best_price < typical_high * 0.6:
-            is_gem = True
+        tlow  = google_result.get("typical_price_low")
+        thigh = google_result.get("typical_price_high")
+        if tlow is not None and thigh is not None and thigh > 0:
+            midpoint = (tlow + thigh) / 2
+            discount_pct = round((1 - best_price / midpoint) * 100, 1)
+        elif thigh is not None and thigh > 0:
+            discount_pct = round((1 - best_price / thigh) * 100, 1)
 
     return {
         "best_price_usd":    best_price,
         "best_source":       best_source,
         "sources_confirmed": confirmed,
         "is_gem":            is_gem,
+        "discount_pct":      discount_pct,
         "price_by_source":   prices,
         "airline_codes":     list(set(filter(None, all_airlines))),
         "seats_remaining":   seats_remaining,

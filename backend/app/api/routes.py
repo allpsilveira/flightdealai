@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,24 @@ from app.models.route import Route
 from app.models.user import User
 
 router = APIRouter()
+
+VALID_CABINS = {"BUSINESS", "FIRST", "PREMIUM_ECONOMY", "ECONOMY"}
+
+
+def _normalize_cabins(cabins: list[str]) -> list[str]:
+    """Coerce to uppercase + reject unknown values. Single source of truth."""
+    out: list[str] = []
+    for c in cabins or []:
+        if not isinstance(c, str):
+            continue
+        norm = c.strip().upper().replace("-", "_").replace(" ", "_")
+        if norm not in VALID_CABINS:
+            raise ValueError(f"Invalid cabin_class: {c!r}. Must be one of {sorted(VALID_CABINS)}")
+        if norm not in out:
+            out.append(norm)
+    if not out:
+        raise ValueError("cabin_classes cannot be empty")
+    return out
 
 
 class RouteCreate(BaseModel):
@@ -23,6 +41,16 @@ class RouteCreate(BaseModel):
     trip_type: str = "ONE_WAY"
     return_date_offset_days: int | None = None
     max_drive_hours: float | None = None
+
+    @field_validator("cabin_classes")
+    @classmethod
+    def _v_cabins(cls, v):
+        return _normalize_cabins(v)
+
+    @field_validator("origins", "destinations")
+    @classmethod
+    def _v_iata(cls, v):
+        return [str(x).strip().upper() for x in (v or []) if x]
 
 
 class RouteResponse(BaseModel):
@@ -78,8 +106,13 @@ async def update_route(
         raise HTTPException(status_code=404, detail="Route not found")
     allowed = {"name", "origins", "destinations", "cabin_classes", "date_from", "date_to", "is_active"}
     for key, value in body.items():
-        if key in allowed:
-            setattr(route, key, value)
+        if key not in allowed:
+            continue
+        if key == "cabin_classes":
+            value = _normalize_cabins(value)
+        elif key in ("origins", "destinations"):
+            value = [str(x).strip().upper() for x in (value or []) if x]
+        setattr(route, key, value)
     await db.flush()
     return route
 

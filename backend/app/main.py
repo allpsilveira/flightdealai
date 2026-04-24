@@ -7,11 +7,15 @@ from fastapi.middleware.gzip import GZipMiddleware
 from app.config import get_settings
 from app.api import (
     auth, routes, deals, prices, awards, airports, cabins, alerts, ws, scan, webhooks,
-    events, intelligence, saved,
+    events, intelligence, saved, lounges,
 )
 
 logger = structlog.get_logger()
 settings = get_settings()
+
+# Optional runtime guardrails
+from app.database import engine
+from app.core.nplusone import install_nplusone
 
 
 def _run_migrations():
@@ -69,6 +73,12 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+# Install N+1 detector middleware and attach DB listeners (best-effort)
+try:
+    install_nplusone(app, engine)
+except Exception:
+    logger.warning("nplusone_install_failed")
+
 # ── Middleware ─────────────────────────────────────────────────────────────────
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 _cors_origins = [
@@ -105,6 +115,7 @@ app.include_router(events.router,   prefix="/api/events",   tags=["events"])
 app.include_router(intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 app.include_router(saved.router,    prefix="/api/saved",    tags=["saved"])
 app.include_router(saved.share_router, prefix="/api/share", tags=["share"])
+app.include_router(lounges.router,  prefix="/api/lounges",  tags=["lounges"])
 
 
 @app.get("/api/health", tags=["health"])

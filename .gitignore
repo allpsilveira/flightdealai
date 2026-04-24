@@ -38,7 +38,10 @@ dist/
 build/
 
 # ML model artifacts (regenerated weekly by ml_retrain DAG)
-ml_models/
+ml_models/*.joblib
+ml_models/*.pkl
+ml_models/*.pt
+ml_models/*.h5
 
 # Node
 frontend/node_modules/

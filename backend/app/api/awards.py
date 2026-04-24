@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.prices import AwardPrice
+from app.models.route import Route
 from app.models.user import User
 
 router = APIRouter()
@@ -43,6 +44,14 @@ async def list_awards(
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the most recent award availability results, newest first."""
+    # Ownership check when filtering by route
+    if route_id:
+        route_row = await db.execute(
+            select(Route).where(Route.id == route_id, Route.user_id == user.id)
+        )
+        if route_row.scalar_one_or_none() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
+
     stmt = (
         select(AwardPrice)
         .order_by(desc(AwardPrice.time))
@@ -80,6 +89,13 @@ async def best_awards_for_route(
     db: AsyncSession = Depends(get_db),
 ):
     """Returns the best (lowest miles) award options for a route, one per loyalty program."""
+    # Ownership check — prevent any authenticated user from reading another user's route data
+    route_row = await db.execute(
+        select(Route).where(Route.id == route_id, Route.user_id == user.id)
+    )
+    if route_row.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
+
     # Subquery: min miles per program for this route/cabin in last 48h
     result = await db.execute(
         select(AwardPrice)

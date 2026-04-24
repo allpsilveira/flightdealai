@@ -87,6 +87,7 @@ async def _run_and_log(
     force_enrich: bool = True,
     trip_type: str = "ONE_WAY",
     return_date_offset_days: int | None = None,
+    prefs: dict | None = None,
 ) -> ScanResponse:
     import structlog
     _log = structlog.get_logger(__name__)
@@ -108,6 +109,7 @@ async def _run_and_log(
             deep=deep,
             trip_type=trip_type,
             return_date_offset_days=return_date_offset_days,
+            prefs=prefs,
         )
 
         # ── 2. Run scoring pipeline ────────────────────────────────────────────
@@ -233,6 +235,23 @@ async def scan_saved_route(
     # Auto-expand home airport with nearby airports within 300 miles
     effective_origins = expand_origins_nearby(route.origins)
 
+    # Build prefs dict from route columns (Plan v3 P1.5)
+    route_prefs = {
+        "max_budget_usd": route.max_budget_usd,
+        "outbound_time_window": route.outbound_time_window,
+        "return_time_window": route.return_time_window,
+        "preferred_airlines": route.preferred_airlines,
+        "excluded_airlines": route.excluded_airlines,
+        "max_stops": route.max_stops,
+        "max_layover_minutes": route.max_layover_minutes,
+        "excluded_connection_airports": route.excluded_connection_airports,
+        "max_total_duration_minutes": route.max_total_duration_minutes,
+        "low_carbon_only": route.low_carbon_only,
+        "preferred_award_programs": route.preferred_award_programs,
+        "passengers": route.passengers,
+        "currency": route.currency,
+    }
+
     return await _run_and_log(
         route_id=route.id,
         origins=effective_origins,
@@ -246,6 +265,7 @@ async def scan_saved_route(
         force_enrich=force_enrich,
         trip_type=route.trip_type,
         return_date_offset_days=route.return_date_offset_days,
+        prefs=route_prefs,
     )
 
 
